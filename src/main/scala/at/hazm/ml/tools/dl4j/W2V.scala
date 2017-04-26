@@ -6,13 +6,12 @@ import java.util
 import java.util.zip.GZIPInputStream
 
 import at.hazm.ml.nlp.Token
-import at.hazm.ml.nlp.corpus.Wikipedia
 import at.hazm.ml.tools._
 import org.deeplearning4j.models.embeddings.loader.WordVectorSerializer
 import org.deeplearning4j.models.word2vec.Word2Vec
 import org.deeplearning4j.text.sentenceiterator.BaseSentenceIterator
 import org.deeplearning4j.text.tokenization.tokenizer.{TokenPreProcess, Tokenizer}
-import org.deeplearning4j.text.tokenization.tokenizerfactory.{JapaneseTokenizerFactory, TokenizerFactory}
+import org.deeplearning4j.text.tokenization.tokenizerfactory.TokenizerFactory
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable

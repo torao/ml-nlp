@@ -1,37 +1,56 @@
 package at.hazm.ml
 
-import java.io.{BufferedInputStream, BufferedReader, File, FileInputStream}
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
-import java.util.zip.GZIPInputStream
 
-import at.hazm.ml.io.using
+import at.hazm.ml.io.{readBinary, using}
 
-import scala.io.Source
+import scala.annotation.tailrec
 
 package object tools {
 
-  def countLines(file:File):Int = {
-    /*if(file.getName.endsWith(".gz")) {
-      using(new GZIPInputStream(new BufferedInputStream(new FileInputStream(file)))){ in =>
-        Source.fromInputStream(in).getLines().size
+  def countLines(file:File):Int = if(file.getName.endsWith(".gz")) {
+    System.err.print(s"counting lines [${file.getName}] ")
+    System.err.flush()
+    var period = 0
+    val count = readBinary(file, 512 * 1024, { (cur, max) =>
+      if(period < (cur * 10) / max){
+        System.err.print(period)
+        System.err.flush()
+        period += 1
       }
-    } else */using(FileChannel.open(file.toPath, StandardOpenOption.READ)){ fc =>
-      var line = 0
-      val buf = ByteBuffer.allocate(512 * 1024)
-      while(fc.position() < fc.size()){
-        val len = fc.read(buf)
-        buf.flip()
-        for(i <- 0 until len){
-          if(buf.get(i) == '\n') line += 1
-        }
+    }){ in =>
+      @tailrec
+      def _read(buf:Array[Byte], count:Int):Int = {
+        val len = in.read(buf)
+        if(len < 0) count
+        else _read(buf, count + buf.take(len).count(_=='\n'))
       }
-      line
+      _read(new Array[Byte](1024), 0)
     }
+    System.err.println(": DONE")
+    System.err.flush()
+    count
+  } else using(FileChannel.open(file.toPath, StandardOpenOption.READ)){ fc =>
+    var line = 0
+    val buf = ByteBuffer.allocate(512 * 1024)
+    while(fc.position() < fc.size()){
+      val len = fc.read(buf)
+      buf.flip()
+      for(i <- 0 until len){
+        if(buf.get(i) == '\n') line += 1
+      }
+    }
+    line
   }
 
   def progress[T](prompt:String, max:Int, interval:Long = 60 * 1000L)(f:((Int,String)=>Boolean)=>T):T = {
+    def time(lt:Long):String = {
+      val (d, h, m, s) = (lt / 24 / 60 / 60, lt / 60 / 60 % 24, lt / 60 % 60, lt % 60)
+      if(d == 0) f"$h%02d:$m%02d:$s%02d" else f"$d%dd $h%02d:$m%02d"
+    }
     var t0 = System.currentTimeMillis()
     var step = 0
     f({ (cur,label) =>
@@ -42,12 +61,12 @@ package object tools {
         step = 0
       } else if(t - (t0 + interval * step) > interval){
         val lt = ((t - t0) * max.toDouble / cur - (t - t0)).toInt / 1000
-        val (d, h, m, s) = (lt / 24 / 60 / 60, lt / 60 / 60 % 24, lt / 60 % 60, lt % 60)
-        val left = if(d == 0) f"$h%02d:$m%02d:$s%02d" else f"$d%dd $h%02d:$m%02d"
+        val left = time(lt)
         System.err.println(f"$prompt: $cur%,d / $max%,d (${cur.toDouble/max*100}%.1f%%) $left%s: $label%s")
         while(t0 + interval * step <= t) step += 1
       } else if(cur == max){
-        System.err.println(f"$prompt: $cur%,d / $max%,d (${cur.toDouble/max*100}%.1f%%) finish")
+        val spent = time(t - t0)
+        System.err.println(f"$prompt: $cur%,d / $max%,d (${cur.toDouble/max*100}%.1f%%) finish in $spent%s")
       }
       true
     })

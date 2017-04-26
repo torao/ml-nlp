@@ -5,7 +5,7 @@ import java.sql.{Connection, DriverManager, ResultSet, Statement}
 
 class Database(file:File) {
 
-  def trx[T](f:(Connection) => T):T = using(DriverManager.getConnection("jdbc:sqlite:$file"))(f)
+  def trx[T](f:(Connection) => T):T = using(DriverManager.getConnection(s"jdbc:sqlite:$file"))(f)
 
 }
 
@@ -26,6 +26,15 @@ object Database {
       args.zipWithIndex.foreach { case (arg, i) => stmt.setObject(i + 1, arg) }
       val rs = stmt.executeQuery()
       new RSIterator[T](rs, stmt, converter)
+    }
+
+    def foreach(sql:String, args:Any*)(callback:(ResultSet) => Nothing):Unit = {
+      val stmt = con.prepareStatement(sql)
+      args.zipWithIndex.foreach { case (arg, i) => stmt.setObject(i + 1, arg) }
+      val rs = stmt.executeQuery()
+      while(rs.next()){
+        callback(rs)
+      }
     }
 
     def exec(sql:String, args:Any*):Int = using(con.prepareStatement(sql)) { stmt =>

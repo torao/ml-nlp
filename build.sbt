@@ -11,10 +11,13 @@ resolvers ++= Seq(
 )
 
 libraryDependencies ++= Seq(
+  "org.scala-lang.modules" %% "scala-xml" % "1.0.6",
   "org.codelibs" % "lucene-analyzers-kuromoji-ipadic-neologd" % "5.3.1-20151231",
   "org.deeplearning4j" % "deeplearning4j-nlp" % "0.8.0",
   "org.deeplearning4j" % "deeplearning4j-nlp-japanese" % "0.8.0",
   "org.deeplearning4j" % "deeplearning4j-nlp-uima" % "0.8.0",
   "org.nd4j" % "nd4j-native-platform" % "0.8.0",
-  "org.xerial" % "sqlite-jdbc" % "3.16.1"
+  "org.xerial" % "sqlite-jdbc" % "3.16.1",
+  "jline" % "jline" % "2.14.3",
+  "org.specs2" %% "specs2-core" % "3.8.9"
 )

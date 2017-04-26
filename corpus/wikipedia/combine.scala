@@ -40,7 +40,7 @@ listFiles().foreach{ file =>
           assert(id.isEmpty && title.isEmpty && buffer.toString.trim().isEmpty, s"$file(${num+1}): $line ($id, $title, $buffer)")
           val a = attr(begin)
           id = a.get("id").map(_.toInt)
-          title = a.get("title").map(_.replaceAll("\\s+", " ").trim())
+          title = a.get("title").map(_.replaceAll("[\\s　]+", " ").trim())
           buffer.length = 0
         case "</doc>" =>
           assert(id.nonEmpty && title.nonEmpty && buffer.nonEmpty, s"$file(${num+1}): $line ($id, $title, $buffer)")

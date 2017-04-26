@@ -1,5 +1,9 @@
 package at.hazm.ml
 
+import java.io._
+import java.nio.charset.StandardCharsets
+import java.util.zip.{GZIPInputStream, GZIPOutputStream}
+
 import scala.language.reflectiveCalls
 
 package object io {
@@ -12,6 +16,24 @@ package object io {
     using(r2){ x2 =>
       f(x1, x2)
     }
+  }
+
+  def readBinary[T](file:File, bufferSize:Int = 0, callback:(Long,Long)=>Unit = null)(f:(InputStream)=>T):T = {
+    val fs = if(callback == null) new FileInputStream(file) else new ProgressInputStream(file, callback)
+    val is = if(file.getName.endsWith(".gz")) new GZIPInputStream(fs) else fs
+    using(if(bufferSize == 0) is else new BufferedInputStream(is, bufferSize))(f)
+  }
+
+  def readLine[T](file:File)(f:(BufferedReader)=>T):T = {
+    val fs = new FileInputStream(file)
+    val is = if(file.getName.endsWith(".gz")) new GZIPInputStream(fs) else fs
+    using(new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8)))(f)
+  }
+
+  def writeLine[T](file:File, append:Boolean = false)(f:(PrintWriter)=>T):T = {
+    val fs = new FileOutputStream(file, append)
+    val os = if(file.getName.endsWith(".gz")) new GZIPOutputStream(fs) else fs
+    using(new PrintWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8)))(f)
   }
 
 }

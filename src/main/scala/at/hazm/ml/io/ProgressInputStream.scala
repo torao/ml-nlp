@@ -2,21 +2,21 @@ package at.hazm.ml.io
 
 import java.io.{File, FileInputStream, FilterInputStream, InputStream}
 
-class ProgressInputStream(_in:InputStream, length:Long, callback:(Long,Long)=>Unit) extends FilterInputStream(_in) {
+class ProgressInputStream(_in:InputStream, callback:(Long)=>Unit) extends FilterInputStream(_in) {
   private[this] var position = 0
 
-  def this(file:File, callback:(Long,Long)=>Unit) = this(new FileInputStream(file), file.length(), callback)
+  def this(file:File, callback:(Long)=>Unit) = this(new FileInputStream(file), callback)
 
   override def read():Int = {
     position += 1
-    callback(position, length)
+    callback(position)
     super.read()
   }
 
   override def read(b:Array[Byte], off:Int, len:Int):Int = {
     val l = super.read(b, off, len)
     position += l
-    callback(position, length)
+    callback(position)
     l
   }
 

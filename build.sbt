@@ -18,6 +18,8 @@ libraryDependencies ++= Seq(
   "org.deeplearning4j" % "deeplearning4j-nlp-uima" % "0.8.0",
   "org.nd4j" % "nd4j-native-platform" % "0.8.0",
   "org.xerial" % "sqlite-jdbc" % "3.16.1",
+  "org.twitter4j" % "twitter4j-core" % "[4.0,)",
   "jline" % "jline" % "2.14.3",
+  "org.slf4j" % "slf4j-log4j12" % "1.7.25",
   "org.specs2" %% "specs2-core" % "3.8.9"
 )

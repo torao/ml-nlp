@@ -198,7 +198,8 @@ object Token {
       notMatches(tokens).foldLeft(mutable.Buffer[Token]()) { case (buffer, (begin, end)) =>
         buffer.appendAll(tokens.slice(begin, end))
         if(end < tokens.length) {
-          buffer.appendAll(convert(tokens.slice(end, end + pattern.length)))
+          val part = tokens.slice(end, end + pattern.length)
+          buffer.appendAll(convert(part))
         }
         buffer
       }

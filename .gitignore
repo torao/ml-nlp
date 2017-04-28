@@ -2,6 +2,8 @@
 *.log
 *.gz
 *.zip
+*.bz2
+*.db
 
 # sbt specific
 .cache

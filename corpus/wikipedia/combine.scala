@@ -1,5 +1,4 @@
 import java.io._
-import java.util.zip._
 import scala.io._
 
 val dir = new File(".")
@@ -31,7 +30,7 @@ listFiles().foreach{ file =>
   val buffer = new StringBuilder()
   var id:Option[Int] = None
   var title:Option[String] = None
-  var lineNum = -1;
+  var lineNum = -1
   try {
     Source.fromFile(file, "UTF-8").getLines.zipWithIndex.foreach{ case (line, num) =>
       lineNum = num

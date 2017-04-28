@@ -33,32 +33,6 @@ case object Wikipedia extends Source("wikipedia", "Wikipedia") {
     buffer.toString
   }
 
-  def importFile(knowledge:Knowledge, file:File):Unit = progress(file.getName, countLines(file)) { prog =>
-    val Qualifier = """(.+)\s*\((.*)\)""".r
-    readLine(file) { in =>
-      val sourceId = knowledge.source.id(this)
-      var currentLine = 0
-      prog(currentLine, "begin")
-      knowledge.cyclopedia.register(sourceId) { callback =>
-        Iterator.continually(in.readLine()).takeWhile(_ != null).foreach { line =>
-          // [12][地理学][地理学  地理学（ちりがく、、、）は、空間ならびに自然と、経済・社会・文化等との関係を対象とする学問の分野。…]
-          val docId :: title :: contents :: Nil = line.split("\t").toList
-          val (term, qualifier) = normalize(title) match {
-            case Qualifier(t, q) => (t.trim(), q)
-            case t => (t, "")
-          }
-
-          optimizeWikipedia(term, qualifier, contents).foreach { case (t, q, c) =>
-            val url = s"https://ja.wikipedia.org/?curid=${docId.trim()}"
-            callback(t, q, c, Some(url))
-          }
-          currentLine += 1
-          prog(currentLine, title)
-        }
-      }
-    }
-  }
-
   private[this] def optimizeWikipedia(term:String, qualifier:String, content:String):Option[(String, String, String)] = {
     if(qualifier == "曖昧さ回避") {
       None

@@ -1,13 +1,16 @@
 package at.hazm.ml
 
-import java.io.File
-import java.nio.ByteBuffer
+import java.io._
+import java.nio.{ByteBuffer, CharBuffer}
 import java.nio.channels.FileChannel
+import java.nio.charset.Charset
 import java.nio.file.StandardOpenOption
+import java.util.zip.GZIPInputStream
 
 import at.hazm.ml.io.{readBinary, using}
 
 import scala.annotation.tailrec
+import scala.io.Source
 
 package object tools {
 
@@ -70,5 +73,43 @@ package object tools {
       }
       true
     })
+  }
+
+  def progress(file:File, charset:Charset)(f:(String)=>Unit):Unit = progress(file.getName, countLines(file)){ prog =>
+    readBinary(file){ is =>
+      Source.fromInputStream(is, charset.name()).getLines().zipWithIndex.foreach{ case (line, i) =>
+        f(line)
+        prog(i + 1, line.take(25))
+      }
+    }
+  }
+
+  class NewLineCallbackReader(in:Reader, newLineListener:(Int)=>Unit) extends FilterReader(in) {
+    private[this] var line = 1
+    override def read():Int = {
+      val ch = super.read()
+      if(ch == '\n'){
+        line += 1
+        newLineListener(line)
+      }
+      ch
+    }
+
+    override def read(cbuf:Array[Char]):Int = read(cbuf, 0, cbuf.length)
+
+    override def read(cbuf:Array[Char], off:Int, len:Int):Int = {
+      val length = super.read(cbuf, off, len)
+      if(length >= 0){
+        for(i <- off until (off + length)){
+          if(cbuf(i) == '\n'){
+            line += 1
+            newLineListener(line)
+          }
+        }
+      }
+      length
+    }
+
+    override def read(target:CharBuffer):Int = super.read(target)
   }
 }

@@ -3,7 +3,6 @@ package at.hazm.ml
 import java.text.{BreakIterator, Normalizer}
 
 import scala.collection.mutable
-import scala.util.matching.Regex
 
 
 package object nlp {

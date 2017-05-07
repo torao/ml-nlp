@@ -1,21 +1,23 @@
 package at.hazm.ml.agent
 
 import java.io.File
+import java.sql.SQLException
 import java.util.{Timer, TimerTask}
 
 import at.hazm.ml.io.Database._
 import at.hazm.ml.io.{Database, readBinary}
 import org.slf4j.LoggerFactory
-import twitter4j.{Status, StatusUpdate, TwitterFactory}
 import twitter4j.conf.PropertyConfiguration
+import twitter4j.{StatusUpdate, TwitterFactory}
 
 import scala.collection.JavaConverters._
 import scala.io.Source
 
-trait Channel[Q, A]{
+trait Channel[Q, A] {
   def start():Unit
 
   def stop():Unit
+
   def ask(question:Q):Option[A]
 }
 
@@ -27,7 +29,7 @@ object Channel {
     */
   val pollingTimer = new Timer("ChannelPollingTimer", true)
 
-  type CALLBACK[Q,A] = (Channel[Q,A],Q)=>Option[A]
+  type CALLBACK[Q, A] = (Channel[Q, A], Q) => Option[A]
 
   abstract class PollingChannel[Q, A] extends Channel[Q, A] {
     private[this] var task:Option[TimerTask] = None
@@ -59,7 +61,7 @@ object Channel {
     protected def poll():Unit
   }
 
-  abstract class Twitter(conf:File, db:Database, responseLimitMin:Int = 5) extends PollingChannel[twitter4j.Status, String] {
+  abstract class Twitter(conf:File, db:Database, responseLimitMin:Int = 5) extends PollingChannel[twitter4j.Status, Reply] {
     db.trx { con =>
       con.createTable(
         """twitter_tweet(
@@ -88,14 +90,21 @@ object Channel {
     protected def poll():Unit = twitter.foreach { t =>
       val user = t.verifyCredentials()
       db.trx { con =>
-        val tm = con.headOption("select max(asked_at) from twitter_tweet")(rs=>Option(rs.getTimestamp(1))).flatten.map(_.getTime).getOrElse(0L)
+        val tm = con.headOption("select max(asked_at) from twitter_tweet")(rs => Option(rs.getTimestamp(1))).flatten.map(_.getTime).getOrElse(0L)
 
         t.getMentionsTimeline.asScala.filter { status =>
           status.getCreatedAt.getTime > math.max(tm, System.currentTimeMillis() - responseLimitMin * 60 * 1000L) &&
             status.getUser.getId != user.getId
         }.sortBy(_.getCreatedAt.getTime).foreach { status =>
-          ask(status).foreach { response =>
-            val reply = new StatusUpdate(response)
+          ask(status).foreach { res =>
+            def tweet(reply:Reply):String = {
+              val max = Twitter.MaxLength - reply.url.map(_.length + 1).getOrElse(0)
+              (if(reply.response.length > max) reply.response.take(max - 1) + "…" else reply.response) + reply.url.map {
+                " " + _
+              }.getOrElse("")
+            }
+
+            val reply = new StatusUpdate(tweet(res))
             reply.setInReplyToStatusId(status.getId)
             val result = t.updateStatus(reply)
             con.exec("insert into twitter_tweet(user_id,screen_name,asked_at,asked_text,replied_at,replied_text) values(?,?,?,?,?,?)",
@@ -108,21 +117,38 @@ object Channel {
     }
   }
 
-  abstract class ConsoleChannel extends Channel[String,String]{
-    private[this] val thread = new Thread(()=> {
-      System.out.print("> ")
+  object Twitter {
+    val MaxLength = 140
+    new java.util.Random
+  }
+
+  abstract class ConsoleChannel extends Channel[String, Reply] {
+    private[this] val logger = LoggerFactory.getLogger(classOf[ConsoleChannel])
+    private[this] val thread = new Thread(() => {
+      System.out.print("agent> ")
       System.out.flush()
-      Source.fromInputStream(System.in).getLines.foreach{ line =>
-        ask(line) match {
-          case Some(reply) => System.out.println(s">>> $reply")
-          case None => System.out.println("??? not_respond")
+      Source.fromInputStream(System.in).getLines.foreach { line =>
+        try {
+          ask(line) match {
+            case Some(reply) =>
+              System.out.println(s">>> ${reply.response}")
+              reply.url.foreach { url =>
+                System.out.println(s">>> $url")
+              }
+            case None => System.out.println("??? not_respond")
+          }
+          System.out.print("> ")
+          System.out.flush()
+        } catch {
+          case ex @ (_:SQLException | _:RuntimeException) =>
+            logger.error("", ex)
+          case ex:Throwable => logger.error("unexpected error", ex)
         }
-        System.out.print("> ")
-        System.out.flush()
       }
     })
     thread.setDaemon(true)
     thread.start()
+
     override def start():Unit = ()
 
     override def stop():Unit = ()

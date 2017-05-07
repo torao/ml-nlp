@@ -18,7 +18,8 @@ object Tokens2Corpus extends App{
   }
 
   val corpus = new Corpus(new File(dict))
-  corpus.bulk{ db =>
+  val vocab = new corpus.Vocabulary()
+  vocab.bulk{ db =>
     Source.fromInputStream(new GZIPInputStream(new FileInputStream(src)), "UTF-8").getLines().map(_.split("\t", 2)).foreach{
       case Array(_, terms) => terms.split("\\s+").foreach(db)
     }

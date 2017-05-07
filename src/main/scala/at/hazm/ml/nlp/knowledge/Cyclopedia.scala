@@ -17,6 +17,7 @@ class Cyclopedia private[knowledge](db:Database) {
         |  meanings text not null,
         |  url text)""".stripMargin)
     con.exec("create unique index if not exists cyclopedia_idx00 on cyclopedia(term, qualifier, source_id, language)")
+    con.exec("create index if not exists cyclopedia_idx01 on cyclopedia(term)")
   }
 
   /**
@@ -28,7 +29,7 @@ class Cyclopedia private[knowledge](db:Database) {
   def search(term:String):Seq[Term] = db.trx { con =>
     val _term = normalize(term)
     con.query("select id,source_id,language,qualifier,meanings,url from cyclopedia where term=?", _term) { rs =>
-      Term(rs.getInt(1), rs.getInt(2), rs.getString(3), _term, rs.getString(4), rs.getString(5), Option(rs.getString(5)))
+      Term(rs.getInt(1), rs.getInt(2), rs.getString(3), _term, rs.getString(4), rs.getString(5), Option(rs.getString(6)))
     }.toList
   }
 
@@ -42,7 +43,7 @@ class Cyclopedia private[knowledge](db:Database) {
     val _term = normalize(term)
     val _qualifier = normalize(qualifier)
     con.query("select id,source_id,language,qualifier,meanings,url from cyclopedia where term=? and qualifier=?", _term, _qualifier) { rs =>
-      Term(rs.getInt(1), rs.getInt(2), rs.getString(3), _term, rs.getString(4), rs.getString(5), Option(rs.getString(5)))
+      Term(rs.getInt(1), rs.getInt(2), rs.getString(3), _term, rs.getString(4), rs.getString(5), Option(rs.getString(6)))
     }.toList
   }
 

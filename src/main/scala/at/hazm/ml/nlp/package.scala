@@ -38,6 +38,30 @@ package object nlp {
     buffer
   }
 
+  /**
+    * 指定された文章を文 (センテンス) ごとに分割します。
+    *
+    * @param tokens センテンスに分割するトークン
+    * @return センテンス
+    */
+  def splitSentence(tokens:Seq[Token]):Seq[Seq[Token]] = {
+    def _split(buffer:mutable.Buffer[Seq[Token]], begin:Int):Seq[Seq[Token]] = {
+      val i = tokens.indexWhere(_.term == "。", begin)
+      if(i < 0){
+        if(begin < tokens.length - 1){
+          buffer.append(tokens.drop(begin))
+        }
+        buffer
+      } else {
+        if(begin != i){
+          buffer.append(tokens.slice(begin, i+1))
+        }
+        _split(buffer, i + 1)
+      }
+    }
+    _split(mutable.Buffer(), 0)
+  }
+
   implicit class _TokenParser(val sc:StringContext){
     def tk(args:Any*):Seq[Token] = {
       Token.parse(sc.parts.zip(args).foldLeft(new StringBuilder()){ case (buffer, (str, arg)) =>

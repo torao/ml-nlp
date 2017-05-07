@@ -5,14 +5,15 @@ import java.nio.{ByteBuffer, CharBuffer}
 import java.nio.channels.FileChannel
 import java.nio.charset.Charset
 import java.nio.file.StandardOpenOption
-import java.util.zip.GZIPInputStream
 
 import at.hazm.ml.io.{readBinary, using}
+import org.slf4j.LoggerFactory
 
 import scala.annotation.tailrec
 import scala.io.Source
 
 package object tools {
+  private[this] val logger = LoggerFactory.getLogger("at.hazm.ml.tools")
 
   def countLines(file:File):Int = if(file.getName.endsWith(".gz")) {
     System.err.print(s"counting lines [${file.getName}] ")
@@ -33,7 +34,7 @@ package object tools {
       }
       _read(new Array[Byte](1024), 0)
     }
-    System.err.println(": DONE")
+    logger.info(": DONE")
     System.err.flush()
     count
   } else using(FileChannel.open(file.toPath, StandardOpenOption.READ)){ fc =>
@@ -59,27 +60,28 @@ package object tools {
     f({ (cur,label) =>
       val t = System.currentTimeMillis()
       if(cur == 0){
-        System.err.println(f"$prompt: $cur%,d / $max%,d (${cur.toDouble/max*100}%.1f%%) ${if(step>0) "restart" else "start"}")
+        logger.info(f"$prompt: $cur%,d / $max%,d (${cur.toDouble/max*100}%.1f%%) ${if(step>0) "RESTART" else "START"}")
         t0 = System.currentTimeMillis()
         step = 0
       } else if(t - (t0 + interval * step) > interval){
-        val lt = ((t - t0) * max.toDouble / cur - (t - t0)).toInt / 1000
+        val lt = ((t - t0) * max.toDouble / cur - (t - t0)).toLong / 1000L
         val left = time(lt)
-        System.err.println(f"$prompt: $cur%,d / $max%,d (${cur.toDouble/max*100}%.1f%%) $left%s: $label%s")
+        logger.info(f"$prompt: $cur%,d / $max%,d (${cur.toDouble/max*100}%.1f%%) $left%s: $label%s")
         while(t0 + interval * step <= t) step += 1
       } else if(cur == max){
-        val spent = time(t - t0)
-        System.err.println(f"$prompt: $cur%,d / $max%,d (${cur.toDouble/max*100}%.1f%%) finish in $spent%s")
+        val spent = time((t - t0) / 1000L)
+        logger.info(f"$prompt: $cur%,d / $max%,d (${cur.toDouble/max*100}%.1f%%) finish in $spent%s")
       }
       true
     })
   }
 
   def progress(file:File, charset:Charset)(f:(String)=>Unit):Unit = progress(file.getName, countLines(file)){ prog =>
+    prog(0, "START")
     readBinary(file){ is =>
       Source.fromInputStream(is, charset.name()).getLines().zipWithIndex.foreach{ case (line, i) =>
         f(line)
-        prog(i + 1, line.take(25))
+        prog(i + 1, line.take(50))
       }
     }
   }

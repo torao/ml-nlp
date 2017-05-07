@@ -20,3 +20,17 @@ project/plugins/project/
 .scala_dependencies
 .worksheet
 .idea/
+.brain_history
+agents/entrezyx/twitter4j.properties
+corpus/wikipedia/enwiki-20170420-synonyms.tsv
+corpus/wikipedia/jawiki-20170401-synonyms.tsv
+Would skip repository corpus/wikipedia/wikiextractor/
+project/project/
+sample_5000.txt
+src/main/java/
+src/main/scala-2.11/
+src/main/scala-2.12/
+src/test/java/
+src/test/resources/
+src/test/scala-2.11/
+src/test/scala-2.12/

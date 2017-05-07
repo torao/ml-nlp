@@ -20,6 +20,8 @@ class Synonym private[knowledge](db:Database){
         |  alter_qualifier text not null
         |)""".stripMargin)
     con.exec("create unique index if not exists synonyms_idx00 on synonyms(source_id, language, term, qualifier, alter_term, alter_qualifier)")
+    con.exec("create index if not exists synonyms_idx01 on synonyms(term)")
+    con.exec("create index if not exists synonyms_idx02 on synonyms(alter_term)")
   }
 
   /**

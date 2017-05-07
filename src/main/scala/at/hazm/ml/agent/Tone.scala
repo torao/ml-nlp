@@ -25,7 +25,8 @@ object Tone {
       "表す" -> ("表し", "アラワシ"),
       "言う" -> ("言い", "イイ"),
       "いう" -> ("言い", "イイ"),
-      "いる" -> ("い", "イ")
+      "いる" -> ("い", "イ"),
+      "呼ぶ" -> ("呼び", "ヨビ")
     )
     override def talk(speech:Seq[Token]):Seq[Token] = {
       val t1 = DE_ARU.replaceAll(speech, { _ => Seq(DESU, KUTEN) })

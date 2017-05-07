@@ -61,6 +61,8 @@ object Wikipedia2Token extends App {
           }
           line += 1
           prog(line, title)
+        case unknown =>
+          System.err.println(s"ERROR: ${unknown.mkString(" ")}")
       }
     }
     os.foreach{ _ => out.close() }

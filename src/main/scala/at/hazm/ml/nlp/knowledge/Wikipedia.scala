@@ -1,10 +1,6 @@
 package at.hazm.ml.nlp.knowledge
 
-import java.io.File
-
-import at.hazm.ml.io.readLine
 import at.hazm.ml.nlp.{Token, normalize, splitSentence}
-import at.hazm.ml.tools.{countLines, progress}
 
 import scala.collection.mutable
 

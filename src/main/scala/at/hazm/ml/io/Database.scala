@@ -5,21 +5,43 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.{Connection, DriverManager, ResultSet}
 
+/**
+  * SQLite3 を使用したローカルデータベース機能です。
+  *
+  * @param file データベースファイル
+  */
 class Database(file:File) {
 
   import Database._
 
+  /**
+    * 新しいデータベース接続を作成します。
+    *
+    * @return
+    */
   def newConnection:Connection = DriverManager.getConnection(s"jdbc:sqlite:$file")
 
   def trx[T](f:(Connection) => T):T = using(newConnection)(f)
 
+  /**
+    * このデータベース内の 1 テーブルを KVS として使用するためのクラスです。
+    * KVS のキーはよく使われる型を暗黙的に利用することができます。
+    * {{{
+    *   import at.hazm.ml.io.Database._
+    *   val kvs = new db.KVS("kvs")
+    * }}}
+    *
+    * @param table テーブル名
+    * @param impl  KVS のキーに対する型クラス
+    * @tparam T KVS のキーの型
+    */
   class KVS[T](table:String)(implicit impl:_KeyType[T]) {
     trx { con =>
-      con.createTable(s"$table(key ${impl.dbType} not null primary key, hash integer not null, value text not null)")
+      con.createTable(s"$table(key ${impl.typeName} not null primary key, hash integer not null, value text not null)")
       con.exec(s"create index if not exists ${table}_idx00 on $table(hash)")
     }
 
-    def apply(key:T):String = get(key).getOrElse{
+    def apply(key:T):String = get(key).getOrElse {
       throw new IllegalArgumentException(s"value not found: $key")
     }
 
@@ -27,10 +49,10 @@ class Database(file:File) {
       _.headOption(s"select value from $table where key=?", key)(_.getString(1))
     }
 
-    def randomSelect(rng: =>Double):(T, String) = {
+    def randomSelect(rng: => Double):(T, String) = {
       val i = (size * rng).toInt
       trx {
-        _.head(s"select key, value from $table limit ?, 1", i){ rs =>
+        _.head(s"select key, value from $table limit ?, 1", i) { rs =>
           (impl.get(rs, 1), rs.getString(2))
         }
       }
@@ -45,7 +67,7 @@ class Database(file:File) {
 
     def getIds(value:String):Seq[T] = trx { con =>
       val hash = makeHash(value)
-      con.query(s"select key, value from $table where hash=?", hash){ rs =>
+      con.query(s"select key, value from $table where hash=?", hash) { rs =>
         (impl.get(rs, 1), rs.getString(2))
       }.filter(_._2 == value).map(_._1).toList
     }
@@ -56,7 +78,7 @@ class Database(file:File) {
       }
     }
 
-    def toCursor:Cursor[(T,String)] = {
+    def toCursor:Cursor[(T, String)] = {
       val con = newConnection
       val stmt = con.prepareStatement(s"select key, value from $table order by key")
       val rs = stmt.executeQuery()
@@ -77,20 +99,30 @@ class Database(file:File) {
 }
 
 object Database {
+
   trait _KeyType[T] {
-    val dbType:String
+    /** このクラスが表す型の SQL 名。 */
+    val typeName:String
+
+    /** 結果セットからこのクラスが定義する型の値を取得します。 */
     def get(rs:ResultSet, i:Int):T
   }
+
   implicit object _IntKeyType extends _KeyType[Int] {
-    override val dbType:String = "integer"
+    override val typeName:String = "integer"
+
     def get(rs:ResultSet, i:Int):Int = rs.getInt(i)
   }
+
   implicit object _LongKeyType extends _KeyType[Long] {
-    override val dbType:String = "bigint"
+    override val typeName:String = "bigint"
+
     def get(rs:ResultSet, i:Int):Long = rs.getLong(i)
   }
+
   implicit object _StringKeyType extends _KeyType[String] {
-    override val dbType:String = "text"
+    override val typeName:String = "text"
+
     def get(rs:ResultSet, i:Int):String = rs.getString(i)
   }
 

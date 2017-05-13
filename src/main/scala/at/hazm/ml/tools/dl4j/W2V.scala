@@ -5,7 +5,9 @@ import java.text.BreakIterator
 import java.util
 import java.util.zip.GZIPInputStream
 
-import at.hazm.ml.nlp.Token
+import at.hazm.ml.nlp.{Corpus, Token}
+import at.hazm.ml.nlp.pipeline.Destination.TextLine
+import at.hazm.ml.nlp.pipeline.{Destination, Pipe, Pipeline, Source}
 import at.hazm.ml.tools._
 import org.deeplearning4j.models.embeddings.loader.WordVectorSerializer
 import org.deeplearning4j.models.word2vec.Word2Vec
@@ -17,6 +19,15 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 object W2V extends App {
+
+  val corpus = new Corpus(new File(args(0)))
+  val vocab = new corpus.Vocabulary("word2vec")
+
+  val pipeline = Pipeline[String,String](
+    src = new Source.TextLine(new File(args(0))) >> Pipe(identity) >> Pipe(identity),
+    dest = new Destination.TextLine(new File(args(1)))
+  )
+  pipeline
 
   /*
   val engine = UimaSentenceIterator.segmenter()
@@ -153,5 +164,7 @@ object W2V extends App {
       }
     }
   }
+
+  // def parse(text:String):Seq[Int] = {}
 
 }

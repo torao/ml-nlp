@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets
 import at.hazm.ml.io.readText
 import at.hazm.ml.nlp.knowledge.{Knowledge, Source, Wikipedia}
 import at.hazm.ml.nlp.{Token, normalize, splitSentence}
-import at.hazm.ml.tools.{countLines, progress}
+import at.hazm.ml.tools.{countLines, fileProgress}
 import jline.console.ConsoleReader
 
 import scala.collection.mutable
@@ -39,27 +39,19 @@ case class Import(key:String, knowledge:Knowledge) extends Command {
   private[this] def importCyclopedia(knowledge:Knowledge, source:Source, lang:String, file:File):Unit = source match {
     case Wikipedia =>
       val Qualifier = """(.+)\s*\((.*)\)""".r
-      progress(file.getName, countLines(file)) { prog =>
-        readText(file) { in =>
-          val sourceId = knowledge.source.id(source)
-          var currentLine = 0
-          prog(currentLine, "begin")
-          knowledge.cyclopedia.register(sourceId, lang) { callback =>
-            Iterator.continually(in.readLine()).takeWhile(_ != null).foreach { line =>
-              // [12][地理学][地理学  地理学（ちりがく、、、）は、空間ならびに自然と、経済・社会・文化等との関係を対象とする学問の分野。…]
-              val docId :: title :: contents :: Nil = line.split("\t").toList
-              val (term, qualifier) = normalize(title) match {
-                case Qualifier(t, q) => (t.trim(), q)
-                case t => (t, "")
-              }
+      val sourceId = knowledge.source.id(source)
+      knowledge.cyclopedia.register(sourceId, lang) { callback =>
+        fileProgress(file, StandardCharsets.UTF_8, knowledge.db) { line =>
+          // [12][地理学][地理学  地理学（ちりがく、、、）は、空間ならびに自然と、経済・社会・文化等との関係を対象とする学問の分野。…]
+          val docId :: title :: contents :: Nil = line.split("\t").toList
+          val (term, qualifier) = normalize(title) match {
+            case Qualifier(t, q) => (t.trim(), q)
+            case t => (t, "")
+          }
 
-              optimizeWikipedia(term, qualifier, contents).foreach { case (t, q, c) =>
-                val url = s"https://${lang.take(2)}.wikipedia.org/?curid=${docId.trim()}"
-                callback(t, q, c, Some(url))
-              }
-              currentLine += 1
-              prog(currentLine, title)
-            }
+          optimizeWikipedia(term, qualifier, contents).foreach { case (t, q, c) =>
+            val url = s"https://${lang.take(2)}.wikipedia.org/?curid=${docId.trim()}"
+            callback(t, q, c, Some(url))
           }
         }
       }
@@ -83,7 +75,7 @@ case class Import(key:String, knowledge:Knowledge) extends Command {
 
     val sourceId = knowledge.source.id(source)
     knowledge.synonyms.register(sourceId, lang) { callback =>
-      progress(file, StandardCharsets.UTF_8) { line =>
+      fileProgress(file, StandardCharsets.UTF_8) { line =>
         // [term1]{:[qualifier1]}[TAB][term2]{:[qualifier2]}
         val term :: alter :: Nil = line.split("\t").toList
         val (t1, q1) = split(term)

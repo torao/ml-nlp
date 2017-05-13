@@ -1,11 +1,20 @@
 package at.hazm.ml.nlp.knowledge
 
-import at.hazm.ml.nlp.{Token, normalize, splitSentence}
+import at.hazm.ml.nlp.pipeline.{IntakePipe, Pipe}
+import at.hazm.ml.nlp.{Text, Token, normalize, splitSentence}
 
 import scala.collection.mutable
 
 
 case object Wikipedia extends Source("wikipedia", "Wikipedia") {
+
+  object Ja {
+    def newPipe:IntakePipe[String,Seq[String]] = Pipe({line =>
+      val Array(id, title, text) = line.split("\t")
+      val contents = Text.normalize(text)
+      Token.parse(contents).map{_.term}
+    })
+  }
 
   /**
     * 指定されて文字列から丸括弧で囲まれている部分を削除します。このメソッドは括弧がネストしている場合にもすべての階層を削除します。
@@ -57,7 +66,7 @@ case object Wikipedia extends Source("wikipedia", "Wikipedia") {
     * @param tokens センテンス
     * @return 読点を削除したセンテンス
     */
-  private[this] def deleteDokuten(tokens:Seq[Token]):Seq[Token] = {
+  def deleteDokuten(tokens:Seq[Token]):Seq[Token] = {
     def noun(t:Token) = t.pos.startsWith("名詞-") || t.pos == "記号-括弧閉"
 
     val buf = mutable.Buffer[Token]()

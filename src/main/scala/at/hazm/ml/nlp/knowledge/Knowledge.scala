@@ -8,7 +8,7 @@ import at.hazm.ml.nlp.normalize
 import scala.collection.mutable
 
 class Knowledge(file:File) {
-  private[this] val db = new Database(file)
+  val db = new Database(file)
 
   val source = new Source.DB(db)
   val cyclopedia = new Cyclopedia(db)

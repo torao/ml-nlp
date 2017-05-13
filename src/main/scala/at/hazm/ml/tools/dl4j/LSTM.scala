@@ -4,8 +4,8 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util
 
-import at.hazm.ml.io.Database
 import at.hazm.ml.io.Database._
+import at.hazm.ml.io.{Database, using}
 import at.hazm.ml.nlp._
 import at.hazm.ml.nlp.knowledge.Wikipedia
 import at.hazm.ml.tools._
@@ -220,30 +220,58 @@ class LSTM(file:File) {
     throw new IllegalArgumentException(s"Distribution is invalid?")
   }
 
-
+  /**
+    * 指定された Extract 済み Wikipedia データ (id title content の TSV 圧縮形式) からコーパスを作成します。
+    *
+    * @param src Wikipedia データファイル
+    */
   private[this] def makeCorpus(src:File):Unit = {
-    def sdb(text:String):Int = sentence.getIds(text).headOption.map(_.toInt).getOrElse {
+    def sdb(text:String):Int = sentence.getIds(text).headOption.getOrElse {
       val id = sentence.size
       sentence.set(id, text)
       id
     }
 
     if(docsDB.size == 0) {
-      progress(src, StandardCharsets.UTF_8) { line =>
-        try {
-          val Array(id, title, content) = line.split("\t")
-          val tokens = Token.parse(normalize(Wikipedia.deleteParenthesis(content)))
-          val termIndices = terms.register(tokens.map { t => s"${t.term}:${t.pos1}" })
-          val sentences = splitSentence(tokens).take(20).map { sentence =>
-            val i = sdb(simplify(sentence).map { t => s"${t.term}:${t.pos}" }.mkString("\t"))
-            val s = tokens.map { t => termIndices(s"${t.term}:${t.pos1}") }.toList
-            Sentence(i, s)
+      fileProgress(src, StandardCharsets.UTF_8, db) { line =>
+        using(new CaboCha()) { cabocha =>
+
+          def makeSentence(content:String):Seq[Seq[Token]] = {
+            val tokens = Token.parse(normalize(Wikipedia.deleteParenthesis(content)))
+            val sentences = splitSetsuzokuJoshi(splitSentence(tokens)).flatMap { tk =>
+              val text = Wikipedia.deleteDokuten(tk).map(_.term).mkString
+              val cs = cabocha.parse(text)
+              val linkedChunkIds = cs.chunks.map(_.link).toSet
+              cs.chunks.filter(c => !linkedChunkIds.contains(c.id)).map { leaf =>
+                def getSequence(c:CaboCha.Chunk):Seq[CaboCha.Chunk] = {
+                  if(c.link < 0) Seq(c) else {
+                    c +: getSequence(cs.chunks.find(_.id == c.link).get)
+                  }
+                }
+
+                getSequence(leaf).map(_.tokens.map(_.term).mkString).mkString
+              }
+            }
+            sentences.map(Token.parse)
           }
-          val doc = Document(id.toInt, title, sentences)
-          docsDB.set(doc.id.toString, doc.toString)
-        } catch {
-          case ex:MatchError =>
-            throw new Exception(s"unexpected source file format: $line", ex)
+
+          try {
+            val Array(id, title, content) = line.split("\t")
+            if(! title.endsWith("一覧") && ! title.contains("曖昧さ回避")){
+              val splitTokens = makeSentence(content)
+              val sentences = splitTokens.map { sentence =>
+                val termIndices = terms.register(sentence.map{t => s"${t.term}:${t.pos1}" })
+                val i = sdb(simplify(sentence).map { t => s"${t.term}:${t.pos}" }.mkString("\t"))
+                val s = sentence.map { t => termIndices(s"${t.term}:${t.pos1}") }.toList
+                Sentence(i, s)
+              }
+              val doc = Document(id.toInt, title, sentences)
+              docsDB.set(doc.id.toString, doc.toString)
+            }
+          } catch {
+            case ex:MatchError =>
+              throw new Exception(s"unexpected source file format: $line", ex)
+          }
         }
       }
     }

@@ -4,7 +4,7 @@ import java.io.{BufferedReader, File}
 import java.nio.charset.StandardCharsets
 
 import at.hazm.ml.nlp.SentenceIterator
-import at.hazm.ml.io.openTextInput
+import at.hazm.core.io.openTextInput
 
 class WikipediaIterator(file:File) extends SentenceIterator {
   private[this] var in:BufferedReader = _

@@ -1,21 +1,20 @@
 package at.hazm.ml.nlp
 
-import java.io.{Reader, StringReader}
+import java.io.{BufferedReader, Reader, StringReader}
 
-import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
-import org.codelibs.neologd.ipadic.lucene.analysis.ja.JapaneseTokenizer
-import org.codelibs.neologd.ipadic.lucene.analysis.ja.tokenattributes.{BaseFormAttribute, InflectionAttribute, PartOfSpeechAttribute, ReadingAttribute}
+import at.hazm.ml.nlp.ja.CaboCha
+import at.hazm.core.io.using
 
 import scala.collection.mutable
 
 /**
   * 形態素を表すクラスです。
   *
-  * @param term       入力単語
-  * @param pos        品詞
-  * @param base       基本形
-  * @param inflection 変化形
-  * @param reading    読み
+  * @param term        入力単語
+  * @param pos         ハイフンでレベルを区切られた品詞
+  * @param base        基本形
+  * @param inflection  変化形
+  * @param reading     読み
   */
 case class Token(term:String, pos:String, base:Option[String], inflection:Option[String], reading:Option[String]) {
   private[this] lazy val _pos = pos.split("-").toList
@@ -28,6 +27,9 @@ case class Token(term:String, pos:String, base:Option[String], inflection:Option
 
   /** この形態素の品詞レベル 3 を返します。品詞レベル 3 を持たない場合は長さゼロの文字列を返します。 */
   def pos3:String = if(_pos.size >= 3) _pos(2) else ""
+
+  /** この形態素の品詞レベル 4 を返します。品詞レベル 4 を持たない場合は長さゼロの文字列を返します。 */
+  def pos4:String = if(_pos.size >= 4) _pos(3) else ""
 }
 
 object Token {
@@ -42,20 +44,27 @@ object Token {
   def apply(term:String, pos:String):Token = Token(term, pos, None, None, None)
 
   /**
-    * 指定された文字列を形態素解析して返します。文字列リテラルから生成する場合はこのメソッドの代わりに {{{tk"これはペンです"}}} のように
+    * 指定された文字列を形態素解析して返します。文字列リテラルから生成する場合はこのメソッドの代わりに `tk"これはペンです"` のように
     * 記述することができます。
     *
     * @param text 形態素解析する文字列
     * @return 形態素解析した結果
     */
-  def parse(text:String):Seq[Token] = parse(new StringReader(text))
+  def parse(text:String):Seq[Token] = using(new CaboCha()){ cabocha =>
+    cabocha.parse(text).chunks.flatMap(_.tokens).map{ t =>
+      // term:String, pos:String, base:Option[String], inflection:Option[String], reading:Option[String]
+      Token(t.term, s"${t.pos1}-${t.pos2}-${t.pos3}-${t.pos4}")
+    }
+  }
+
 
   /**
     * 指定された入力ストリームからテキストを読み込んで形態素解析して返します。
     *
-    * @param in テキストを読み込むストリーム
+    * @param r テキストを読み込むストリーム
     * @return 形態素解析した結果
     */
+  /*
   def parse(in:Reader):Seq[Token] = {
     val tk = new JapaneseTokenizer(null, false, JapaneseTokenizer.Mode.NORMAL)
     val base = tk.addAttribute(classOf[BaseFormAttribute])
@@ -71,6 +80,7 @@ object Token {
     }
     tokens
   }
+  */
 
   /** 形態素と一致判定を行うパターン */
   private[nlp] class Pattern(term:Option[String], pos:Option[String]) {
@@ -218,7 +228,7 @@ object Token {
     private[this] def notMatches(tokens:Seq[Token], fromIndex:Int = 0):Stream[(Int, Int)] = {
       val i = indexOf(tokens, fromIndex)
       if(i < 0) {
-        (fromIndex, tokens.length) #:: Stream.empty
+        (fromIndex, tokens.length) #:: Stream.empty[(Int,Int)]
       } else {
         (fromIndex, i) #:: notMatches(tokens, i + pattern.length)
       }

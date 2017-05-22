@@ -3,7 +3,7 @@ package at.hazm.ml.tools.cmd
 import java.io.File
 import java.nio.charset.StandardCharsets
 
-import at.hazm.ml.io.readText
+import at.hazm.core.io.readText
 import at.hazm.ml.nlp.knowledge.{Knowledge, Source, Wikipedia}
 import at.hazm.ml.nlp.{Token, normalize, splitSentence}
 import at.hazm.ml.tools.{countLines, fileProgress}

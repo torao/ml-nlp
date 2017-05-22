@@ -3,7 +3,7 @@ package at.hazm.ml.tools
 import java.io._
 import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
-import at.hazm.ml.io.using
+import at.hazm.core.io.using
 import at.hazm.ml.nlp.{Token, normalize}
 
 /**

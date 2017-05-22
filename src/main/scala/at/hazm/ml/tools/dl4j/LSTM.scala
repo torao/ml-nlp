@@ -1,14 +1,10 @@
 package at.hazm.ml.tools.dl4j
 
 import java.io.File
-import java.nio.charset.StandardCharsets
 import java.util
 
-import at.hazm.ml.io.Database._
-import at.hazm.ml.io.{Database, using}
+import at.hazm.core.db.{Cursor, Database, LocalDB}
 import at.hazm.ml.nlp._
-import at.hazm.ml.nlp.knowledge.Wikipedia
-import at.hazm.ml.tools._
 import org.deeplearning4j.nn.api.OptimizationAlgorithm
 import org.deeplearning4j.nn.conf.layers.{GravesLSTM, RnnOutputLayer}
 import org.deeplearning4j.nn.conf.{BackpropType, MultiLayerConfiguration, NeuralNetConfiguration, Updater}
@@ -37,18 +33,22 @@ object LSTM {
 }
 
 class LSTM(file:File) {
-  val logger = LoggerFactory.getLogger(getClass)
+  private[LSTM] val logger = LoggerFactory.getLogger(getClass)
 
-  private[this] val db = new Database(file)
+  private[this] val db = new LocalDB(file)
   private[this] val corpus = new Corpus(db)
-  private[this] val terms = new corpus.Vocabulary()
-  private[this] val sentence = new db.KVS[Int]("sentences")
-  private[this] val docsDB = new db.KVS[String]("docs")
+  private[this] val terms = corpus.vocabulary
+  private[this] val sentence = new db.KVS[Int, String]("sentences")
+
+  /** [[Document]] の文字列表現を保存する KVS */
+  private[this] val docsDB = new db.KVS[String, String]("docs")
+
+  logger.info(f"コーパスDB: $file%s")
 
   def exec(src:File, modelFile:File):Unit = {
     val sampleSentenceSize = 10000
     val maxSentencesPerDoc = 100
-    makeCorpus(src)
+    //makeCorpus(src)
     val model = calculate(modelFile, sampleSentenceSize, maxSentencesPerDoc)
     predict(model, sampleSentenceSize, maxSentencesPerDoc, 5)
   }
@@ -57,9 +57,10 @@ class LSTM(file:File) {
     def _sentence(i:Int):String = {
       sentence(i).split("\t").filter(_.nonEmpty).map { term =>
         val Array(t, p) = term.split(":", 2)
-        if(t == "*") s" ______ " else t
+        if(t == "*") s"＿" else t
       }.mkString
     }
+
     //Create input for initialization
     val numSamples = 5
     val initializationInput = Nd4j.zeros(numSamples, sampleSentenceSize, maxSentencesPerDoc)
@@ -70,9 +71,10 @@ class LSTM(file:File) {
         val (_, d) = docsDB.randomSelect(math.random())
         val doc = Document(d)
         val seqIndex = (doc.sentences.length * math.random()).toInt
-        val seqLength = ((doc.sentences.length - seqIndex) * math.random()).toInt
+        val seqLength = math.min(((doc.sentences.length - seqIndex) * math.random()).toInt, maxSentencesPerDoc)
         val sentences = doc.sentences.slice(seqIndex, seqIndex + seqLength)
-        if(!sentences.forall(_.index < sampleSentenceSize) || sentences.length < 3) {
+        // サンプル数を超えたインデックスを持つセンテンスや長さが3以下のセンテンスは除外
+        if(!sentences.forall(_.index < sampleSentenceSize) || sentences.length < 5) {
           _select()
         } else sentences
       }
@@ -81,7 +83,7 @@ class LSTM(file:File) {
       ss.zipWithIndex.foreach { case (seq, j) =>
         initializationInput.putScalar(Array(i, seq.index, j), 1.0f)
       }
-      new StringBuilder(ss.map(s => "> " + _sentence(s.index)).mkString("。\n"))
+      new StringBuilder(ss.map(s => "> " + _sentence(s.index)).mkString("", "。\n", "。\n"))
     }
 
     //Sample from network (and feed samples back into input) one character at a time (for all samples)
@@ -192,11 +194,13 @@ class LSTM(file:File) {
       }
 
       ModelSerializer.writeModel(net, modelFile, true)
-      logger.info(s"SLTM model stored: ${modelFile.getName}")
+      logger.info(s"LSTM モデルを保存しました: ${modelFile.getName}")
       net
     } else {
-      logger.info(s"loading LSTM model: ${modelFile.getName}")
-      ModelSerializer.restoreMultiLayerNetwork(modelFile)
+      logger.info(s"LSTM モデルをロードしています: ${modelFile.getName}")
+      val model = ModelSerializer.restoreMultiLayerNetwork(modelFile)
+      logger.info(s"LSTM モデルをロードしました: ${modelFile.getName}")
+      model
     }
   }
 
@@ -220,63 +224,6 @@ class LSTM(file:File) {
     throw new IllegalArgumentException(s"Distribution is invalid?")
   }
 
-  /**
-    * 指定された Extract 済み Wikipedia データ (id title content の TSV 圧縮形式) からコーパスを作成します。
-    *
-    * @param src Wikipedia データファイル
-    */
-  private[this] def makeCorpus(src:File):Unit = {
-    def sdb(text:String):Int = sentence.getIds(text).headOption.getOrElse {
-      val id = sentence.size
-      sentence.set(id, text)
-      id
-    }
-
-    if(docsDB.size == 0) {
-      fileProgress(src, StandardCharsets.UTF_8, db) { line =>
-        using(new CaboCha()) { cabocha =>
-
-          def makeSentence(content:String):Seq[Seq[Token]] = {
-            val tokens = Token.parse(normalize(Wikipedia.deleteParenthesis(content)))
-            val sentences = splitSetsuzokuJoshi(splitSentence(tokens)).flatMap { tk =>
-              val text = Wikipedia.deleteDokuten(tk).map(_.term).mkString
-              val cs = cabocha.parse(text)
-              val linkedChunkIds = cs.chunks.map(_.link).toSet
-              cs.chunks.filter(c => !linkedChunkIds.contains(c.id)).map { leaf =>
-                def getSequence(c:CaboCha.Chunk):Seq[CaboCha.Chunk] = {
-                  if(c.link < 0) Seq(c) else {
-                    c +: getSequence(cs.chunks.find(_.id == c.link).get)
-                  }
-                }
-
-                getSequence(leaf).map(_.tokens.map(_.term).mkString).mkString
-              }
-            }
-            sentences.map(Token.parse)
-          }
-
-          try {
-            val Array(id, title, content) = line.split("\t")
-            if(! title.endsWith("一覧") && ! title.contains("曖昧さ回避")){
-              val splitTokens = makeSentence(content)
-              val sentences = splitTokens.map { sentence =>
-                val termIndices = terms.register(sentence.map{t => s"${t.term}:${t.pos1}" })
-                val i = sdb(simplify(sentence).map { t => s"${t.term}:${t.pos}" }.mkString("\t"))
-                val s = sentence.map { t => termIndices(s"${t.term}:${t.pos1}") }.toList
-                Sentence(i, s)
-              }
-              val doc = Document(id.toInt, title, sentences)
-              docsDB.set(doc.id.toString, doc.toString)
-            }
-          } catch {
-            case ex:MatchError =>
-              throw new Exception(s"unexpected source file format: $line", ex)
-          }
-        }
-      }
-    }
-  }
-
   /** 構文の単純化 */
   private[this] def simplify(tokens:Seq[Token]):Seq[Token] = {
     val buffer = mutable.Buffer[Token]()
@@ -293,9 +240,9 @@ class LSTM(file:File) {
     buffer
   }
 
-  private[this] class IT(kvs:Database#KVS[String], miniBatchSize:Int, sentenceSize:Int, maxSentencesPerDoc:Int) extends DataSetIterator {
-    private[this] val size = kvs.size
-    private[this] var it:Option[Database.Cursor[(String, String)]] = None
+  private[this] class IT(kvs:LocalDB#KVS[String, String], miniBatchSize:Int, sentenceSize:Int, maxSentencesPerDoc:Int) extends DataSetIterator {
+    private[this] val size = kvs.realSize
+    private[this] var it:Option[Cursor[(String, String)]] = None
     private[this] var remains = sentenceSize
 
     override def next(num:Int):DataSet = {

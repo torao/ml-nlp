@@ -1,11 +1,11 @@
 package at.hazm.ml.nlp.knowledge
 
-import at.hazm.ml.io.Database
-import at.hazm.ml.io.Database._
+import at.hazm.core.db.LocalDB
+import at.hazm.core.db._
 import at.hazm.ml.nlp.knowledge.Cyclopedia.Term
 import at.hazm.ml.nlp.normalize
 
-class Cyclopedia private[knowledge](db:Database) {
+class Cyclopedia private[knowledge](db:LocalDB) {
   db.trx { con =>
     con.createTable(
       """cyclopedia(

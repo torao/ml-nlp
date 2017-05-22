@@ -2,7 +2,7 @@ package at.hazm.ml.tools
 
 import java.io.{File, PushbackReader, StringReader}
 
-import at.hazm.ml.io.{readText, writeText}
+import at.hazm.core.io.{readText, writeText}
 import at.hazm.ml.nlp.knowledge.Knowledge
 import at.hazm.ml.tools.cmd.CommandError
 import jline.console.ConsoleReader

@@ -2,7 +2,7 @@ package at.hazm.ml.agent
 
 import java.io.File
 
-import at.hazm.ml.io.Database
+import at.hazm.core.db.LocalDB
 import at.hazm.ml.nlp.Token
 import at.hazm.ml.nlp.knowledge.Knowledge
 import org.slf4j.LoggerFactory
@@ -11,7 +11,7 @@ import twitter4j.Status
 class Agent(dir:File, tones:Seq[Tone] = Seq.empty) {
   import Agent.logger
 
-  private[this] val db = new Database(new File(dir, "agent.db"))
+  private[this] val db = new LocalDB(new File(dir, "agent.db"))
   private[this] val knowledge = new Knowledge(new File("brain.db"))
   private[this] val talk = new Talk(new File(dir, "talk.conf"))
 

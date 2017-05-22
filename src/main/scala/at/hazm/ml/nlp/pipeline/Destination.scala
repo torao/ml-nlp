@@ -4,19 +4,46 @@ import java.io.{File, Writer}
 import java.nio.charset.Charset
 import java.sql.DriverManager
 
-import at.hazm.ml.io.openTextOutput
+import at.hazm.core.io.openTextOutput
 
+/**
+  * パイプライン上でのデータの出力先を表します。PUSH 型の動作になります。
+  *
+  * @tparam OUT 出力できるデータの型
+  */
 trait Destination[OUT] extends AutoCloseable {
 
-  def <<[T](prev:ExhaustPipe[T,OUT]):ExhaustPipe[T,OUT] = {
-    prev._dest = Some(this)
-    prev
-  }
+  def <<[T](next:ExhaustFilter[T, OUT]):Destination[T] = new Destination.Joint(this, next)
+
+  def <<[T](next:(T) => OUT):Destination[T] = new Destination.Joint(this, next)
+
+  /**
+    * この出力先に指定されたデータを出力します。
+    *
+    * @param data 出力するデータ
+    */
   def write(data:OUT)
 }
 
 
 object Destination {
+
+  private[pipeline] class Joint[IN, OUT](dest:Destination[OUT], filter:ExhaustFilter[IN, OUT]) extends Destination[IN] {
+    def this(dest:Destination[OUT], filter:(IN) => OUT) = this(dest, ExhaustFilter(filter))
+
+    override def write(data:IN):Unit = dest.write(filter.backward(data))
+
+    override def close():Unit = {
+      filter.close()
+      dest.close()
+    }
+  }
+
+  case class None[T]() extends Destination[T] {
+    override def write(data:T):Unit = ()
+
+    override def close():Unit = ()
+  }
 
   /**
     * 1行1データのテキストで表される Destination です。

@@ -1,4 +1,4 @@
-package at.hazm.ml.io
+package at.hazm.core.io
 
 import java.io._
 

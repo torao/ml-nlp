@@ -2,13 +2,13 @@ package at.hazm.ml.nlp.knowledge
 
 import java.io.File
 
-import at.hazm.ml.io.Database
+import at.hazm.core.db.LocalDB
 import at.hazm.ml.nlp.normalize
 
 import scala.collection.mutable
 
 class Knowledge(file:File) {
-  val db = new Database(file)
+  val db = new LocalDB(file)
 
   val source = new Source.DB(db)
   val cyclopedia = new Cyclopedia(db)

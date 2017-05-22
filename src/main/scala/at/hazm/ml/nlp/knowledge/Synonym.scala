@@ -1,13 +1,13 @@
 package at.hazm.ml.nlp.knowledge
 
-import at.hazm.ml.io.Database
-import at.hazm.ml.io.Database._
+import at.hazm.core.db.LocalDB
+import at.hazm.core.db._
 import at.hazm.ml.nlp.knowledge.Synonym.Term
 import at.hazm.ml.nlp.normalize
 
 import scala.annotation.tailrec
 
-class Synonym private[knowledge](db:Database){
+class Synonym private[knowledge](db:LocalDB){
   db.trx { con =>
     con.createTable(
       """synonyms(

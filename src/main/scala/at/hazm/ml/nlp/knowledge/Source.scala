@@ -1,7 +1,7 @@
 package at.hazm.ml.nlp.knowledge
 
-import at.hazm.ml.io.Database
-import at.hazm.ml.io.Database._
+import at.hazm.core.db.LocalDB
+import at.hazm.core.db._
 
 abstract class Source(val uri:String, val label:String)
 
@@ -12,7 +12,7 @@ object Source {
   def get(uri:String):Option[Source] = valuesMap.get(uri)
   def apply(uri:String):Source = valuesMap.apply(uri)
 
-  class DB private[knowledge](db:Database) {
+  class DB private[knowledge](db:LocalDB) {
     db.trx { con =>
       con.createTable(
         """source(

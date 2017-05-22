@@ -7,8 +7,9 @@ import java.nio.file.StandardOpenOption
 import java.nio.{ByteBuffer, CharBuffer}
 import java.sql.Timestamp
 
-import at.hazm.ml.io.Database._
-import at.hazm.ml.io.{Database, readBinary, using}
+import at.hazm.core.db.LocalDB
+import at.hazm.core.db._
+import at.hazm.core.io.{readBinary, using}
 import org.slf4j.LoggerFactory
 
 import scala.annotation.tailrec
@@ -17,7 +18,7 @@ import scala.io.Source
 package object tools {
   private[this] val logger = LoggerFactory.getLogger("at.hazm.ml.tools")
 
-  def countLines(file:File, cacheDB:Database = null):Int = Option(cacheDB).flatMap { db =>
+  def countLines(file:File, cacheDB:LocalDB = null):Int = Option(cacheDB).flatMap { db =>
     // 行数が保存されていてファイルに変更がなければそれを返す
     db.trx { con =>
       con.createTable(s"file_info(name text not null primary key, length bigint not null, last_modified timestamp not null, lines integer not null)")
@@ -100,7 +101,7 @@ package object tools {
     })
   }
 
-  def fileProgress(file:File, charset:Charset, cacheDB:Database = null)(f:(String) => Unit):Unit = progress(file.getName, countLines(file)) { prog =>
+  def fileProgress(file:File, charset:Charset, cacheDB:LocalDB = null)(f:(String) => Unit):Unit = progress(file.getName, countLines(file)) { prog =>
     prog(0, "START")
     readBinary(file) { is =>
       Source.fromInputStream(is, charset.name()).getLines().zipWithIndex.foreach { case (line, i) =>

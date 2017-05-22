@@ -5,9 +5,8 @@ import java.text.BreakIterator
 import java.util
 import java.util.zip.GZIPInputStream
 
+import at.hazm.ml.nlp.pipeline.IntakeFilter.Cache
 import at.hazm.ml.nlp.{Corpus, Token}
-import at.hazm.ml.nlp.pipeline.Destination.TextLine
-import at.hazm.ml.nlp.pipeline.{Destination, Pipe, Pipeline, Source}
 import at.hazm.ml.tools._
 import org.deeplearning4j.models.embeddings.loader.WordVectorSerializer
 import org.deeplearning4j.models.word2vec.Word2Vec
@@ -20,18 +19,33 @@ import scala.collection.mutable
 
 object W2V extends App {
 
-  val corpus = new Corpus(new File(args(0)))
-  val vocab = new corpus.Vocabulary("word2vec")
+  val corpus = new Corpus(new File(args(0) + "_corpus.db"), "word2vec")
+  val vocab = corpus.vocabulary
+  val docs = new File(args(0) + "_docs.txt.bz2")
+  val cache = Cache(docs, { idx:Seq[Int] => idx.mkString(" ") }, { line:String => line.split(" ").collect { case x if x.nonEmpty => x.toInt }.toSeq })
 
-  val pipeline = Pipeline[String,String](
-    src = new Source.TextLine(new File(args(0))) >> Pipe(identity) >> Pipe(identity),
-    dest = new Destination.TextLine(new File(args(1)))
+  /*
+  val pipeline = new Pipeline.Builder(
+    new Source.TextLine(new File(args(0))),
+    Destination.TextLine(new OutputStreamWriter(System.out))
   )
+    .forward(Normalize())
+    .forward(CaboChaTokenize())
+    .forward(Flatten[Seq[CaboCha.Sentence], CaboCha.Sentence]())
+    .forward { s:CaboCha.Sentence =>
+      s.chunks.flatMap { c => c.tokens.map { t => s"${t.term}:${t.feature}" } }
+    }
+    .forward(vocab.Pipe)
+    .forward(cache)
+    .backward{ terms:Seq[String] => terms.mkString }
+    .backward(vocab.Pipe)
+    .build
   pipeline
+  */
 
   /*
   val engine = UimaSentenceIterator.segmenter()
-  val it = UimaSentenceIterator.createWithPath("sample_5000.txt")
+  val it = UimaSentenceIterato r.createWithPath("sample_5000.txt")
   it.setPreProcessor((s:String)=> Wikipedia.normalize(s))
   while(it.hasNext){
     System.out.println(it.nextSentence())
@@ -46,7 +60,7 @@ object W2V extends App {
       throw new Exception()
   }
 
-  val model = if(! dest.exists()){
+  val model = if(!dest.exists()) {
     Token.parse("")
     progress(src.getName, countLines(src)) { prog =>
       val it = new SI(src, prog)
@@ -117,15 +131,15 @@ object W2V extends App {
     }
 
     override def nextSentence():String = synchronized {
-      if (hasNext) {
+      if(hasNext) {
         val content = queue.remove(0)
-        if (queue.isEmpty) fill()
+        if(queue.isEmpty) fill()
         content
       } else throw new IllegalStateException()
     }
 
     override def hasNext:Boolean = synchronized {
-      if (queue.nonEmpty) true else {
+      if(queue.nonEmpty) true else {
         fill()
         queue.nonEmpty
       }
@@ -149,15 +163,15 @@ object W2V extends App {
           (it.first() +: Iterator.continually(it.next()).takeWhile(_ != BreakIterator.DONE).toList).sliding(2).foreach {
             case begin :: end :: Nil =>
               val raw = content.substring(begin, end).trim()
-              val sentence = if (preProcessor == null) raw else preProcessor.preProcess(raw)
-              if (sentence.nonEmpty) {
+              val sentence = if(preProcessor == null) raw else preProcessor.preProcess(raw)
+              if(sentence.nonEmpty) {
                 queue.append(sentence)
               }
             case _ => throw new IllegalStateException()
           }
           lines += 1
           prog(lines, title)
-          if (queue.isEmpty) {
+          if(queue.isEmpty) {
             fill()
           }
         case None => ()

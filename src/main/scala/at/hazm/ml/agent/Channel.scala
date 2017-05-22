@@ -4,8 +4,9 @@ import java.io.File
 import java.sql.SQLException
 import java.util.{Timer, TimerTask}
 
-import at.hazm.ml.io.Database._
-import at.hazm.ml.io.{Database, readBinary}
+import at.hazm.core.db.LocalDB
+import at.hazm.core.db._
+import at.hazm.core.io.readBinary
 import org.slf4j.LoggerFactory
 import twitter4j.conf.PropertyConfiguration
 import twitter4j.{StatusUpdate, TwitterFactory}
@@ -61,7 +62,7 @@ object Channel {
     protected def poll():Unit
   }
 
-  abstract class Twitter(conf:File, db:Database, responseLimitMin:Int = 5) extends PollingChannel[twitter4j.Status, Reply] {
+  abstract class Twitter(conf:File, db:LocalDB, responseLimitMin:Int = 5) extends PollingChannel[twitter4j.Status, Reply] {
     db.trx { con =>
       con.createTable(
         """twitter_tweet(
@@ -79,7 +80,7 @@ object Channel {
     override def start():Unit = {
       val c = readBinary(conf) { in => new PropertyConfiguration(in) }
       this.twitter = Some(new TwitterFactory(c).getInstance())
-      startPolling(15 * 1000L)
+      startPolling(30 * 1000L)
     }
 
     override def stop():Unit = this.twitter.foreach { _ =>

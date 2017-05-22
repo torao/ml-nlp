@@ -11,22 +11,21 @@ object Text {
     *
     * @param text 変換する文字列
     * @return 変換後の文字列
-    *
     */
   def normalize(text:String):String = {
     // 連続した空白文字を一つの空白文字に置き換え & 前方空白の除去
-    val reduceSpaces = text.foldLeft(new StringBuilder(text.length)){
-      case (buffer, ch) if Character.isWhitespace(ch)=>
-        if(buffer.nonEmpty && buffer.charAt(buffer.length - 1) != ' '){
+    val reduceSpaces = text.foldLeft(new StringBuilder(text.length)) {
+      case (buffer, ch) if Character.isWhitespace(ch) || Character.isISOControl(ch) =>
+        if(buffer.nonEmpty && buffer.charAt(buffer.length - 1) != ' ') {
           buffer.append(' ')
         } else buffer
-      case (buffer, ch)  => buffer.append(ch)
+      case (buffer, ch) => buffer.append(ch)
     }
     // 後方空白の除去
-    if(reduceSpaces.last == ' '){
+    if(reduceSpaces.nonEmpty && reduceSpaces.last == ' ') {
       reduceSpaces.setLength(reduceSpaces.length - 1)
     }
-    // 大文字に変換
+    // 全角の半角変換 & 大文字変換
     Normalizer.normalize(reduceSpaces, Normalizer.Form.NFKC).toUpperCase
   }
 }

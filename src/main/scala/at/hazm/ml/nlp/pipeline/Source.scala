@@ -4,35 +4,95 @@ import java.io.{BufferedReader, File}
 import java.nio.charset.Charset
 import java.sql.DriverManager
 
-import at.hazm.ml.io.openTextInput
+import at.hazm.core.io.openTextInput
 
+/**
+  * データの入力元を表します。パイプライン上のデータソースは PULL 型の取り出しです。
+  *
+  * @tparam OUT このデータソースから取り出すデータの型
+  */
 trait Source[OUT] extends Iterator[OUT] with AutoCloseable {
 
-  def >>[T](next:IntakePipe[OUT, T]):IntakePipe[OUT, T] = {
-    next._src = Some(this)
-    next
-  }
+  def >>[T](next:IntakeFilter[OUT, T]):Source[T] = new Source.Joint(this, next)
+
+  def >>[T](next:(OUT) => T):Source[T] = new Source.Joint(this, next)
+
+  /**
+    * このパイプから次のデータが取り出せるかを判定します。このメソッドが true を返した場合、[[next()]] は例外なしで (システム由来で
+    * 予測が不可能な例外を除く) データを返す必要があります。
+    *
+    * @return
+    */
+  def hasNext:Boolean
+
+  /**
+    * パイプから次のデータを取り出します。[[hasNext]] が false を返している状態でこのメソッドを呼び出すことはできません。
+    *
+    * @return 次のデータ
+    * @throws NoSuchElementException [[hasNext]] が false を返しておりこれ以上データが存在しない場合
+    */
+  @throws[NoSuchElementException]
+  def next():OUT
+
+  /**
+    * このソースの入力を初期位置に戻します
+    */
+  def reset():Unit
+
+  /**
+    * このパイプおよびその入力方向のソースをクローズしリソースを開放します。
+    */
+  def close():Unit
+
 }
 
 object Source {
 
-  /**
-    * 1行1データのテキストで表される Source です。
-    *
-    * @param in 入力ストリーム
-    */
-  class TextLine(in:BufferedReader) extends Source[String] {
+  private[pipeline] class Joint[IN, OUT](src:Source[IN], filter:IntakeFilter[IN, OUT]) extends Source[OUT] {
+    def this(src:Source[IN], filter:(IN) => OUT) = this(src, IntakeFilter(filter))
+
+    override def hasNext:Boolean = src.hasNext || filter.hasNext
 
     /**
-      * 指定されたファイルから行データを読み込む Source を構築します。ファイルはプレーンテキストの他にその圧縮形式である
-      * GZIP または BZIP2 を指定することができます。これらの圧縮形式はファイルの拡張子で認識されます。
+      * パイプから次のデータを取り出します。[[hasNext]] が false を返している状態でこのメソッドを呼び出すことはできません。
       *
-      * @param file    行データの含まれているテキストファイルまたはその圧縮ファイル
-      * @param charset テキスト入力の文字セット。省略時はシステムデフォルト。
+      * @throws NoSuchElementException [[hasNext]] が false を返しておりこれ以上データが存在しない場合
       */
-    def this(file:File, charset:Charset = Charset.defaultCharset()) = this(openTextInput(file, charset))
+    @throws[NoSuchElementException]
+    override def next():OUT = if(filter.hasNext) {
+      filter.next()
+    } else if(src.hasNext) {
+      filter.forward(src.next())
+    } else throw new NoSuchElementException("source has not more elements")
+
+    override def reset():Unit = {
+      filter.reset()
+      src.reset()
+    }
+
+    override def close():Unit = {
+      filter.close()
+      src.close()
+    }
+  }
+
+  /**
+    * 指定されたファイルから行データを読み込む Source を構築します。ファイルはプレーンテキストの他にその圧縮形式である
+    * GZIP または BZIP2 を指定することができます。これらの圧縮形式はファイルの拡張子で認識されます。
+    *
+    * @param file    行データの含まれているテキストファイルまたはその圧縮ファイル
+    * @param charset テキスト入力の文字セット。省略時はシステムデフォルト。
+    */
+  class TextLine(file:File, charset:Charset = Charset.defaultCharset()) extends Source[String] {
+
+    private[this] var in = openTextInput(file, charset)
 
     private[this] var line = in.readLine()
+
+    override def reset():Unit = {
+      in.close()
+      in = openTextInput(file, charset)
+    }
 
     override def close():Unit = in.close()
 
@@ -58,7 +118,7 @@ object Source {
   class Database(url:String, username:String, password:String, query:String, args:AnyVal*) extends Source[String] {
     private[this] val con = DriverManager.getConnection(url, username, password)
     private[this] val stmt = con.prepareStatement(query)
-    private[this] val rs = {
+    private[this] var rs = {
       args.zipWithIndex.foreach { case (arg, i) => stmt.setObject(i + 1, arg) }
       stmt.executeQuery()
     }
@@ -70,6 +130,11 @@ object Source {
       val value = rs.getString(1)
       _hasNext = rs.next()
       value
+    }
+
+    override def reset():Unit = {
+      rs.close()
+      rs = stmt.executeQuery()
     }
 
     override def close():Unit = {

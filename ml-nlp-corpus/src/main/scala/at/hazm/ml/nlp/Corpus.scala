@@ -1,12 +1,14 @@
 package at.hazm.ml.nlp
 
-import java.io.File
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, InputStreamReader}
+import java.nio.charset.StandardCharsets
 import java.sql.{PreparedStatement, ResultSet}
 import java.util.concurrent.atomic.AtomicInteger
 
-import at.hazm.core.db.LocalDB
-import at.hazm.core.db._
+import at.hazm.core.db.{LocalDB, _}
+import at.hazm.core.io.{readAllChars, using}
 import at.hazm.ml.nlp.Corpus._ParagraphType
+import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
 import org.xerial.snappy.Snappy
 import play.api.libs.json.{JsObject, Json}
 
@@ -107,7 +109,7 @@ class Corpus(val db:LocalDB, val namespace:String) {
       * @return `morphs` と同じ順序に並んだインデックス
       */
     def indicesOf(morphs:Seq[Morph]):Seq[Int] = db.trx { con =>
-      val existing = morphs.groupBy(_.key).values.map(_.head).grouped(20).map{ ms =>
+      val existing = morphs.groupBy(_.key).values.map(_.head).grouped(20).map { ms =>
         val where = ms.map { morph =>
           s"surface=${literal(morph.surface)} and pos1=${literal(morph.pos1)} and pos2=${literal(morph.pos2)} and pos3=${literal(morph.pos3)} and pos4=${literal(morph.pos4)}"
         }.mkString("(", ") or (", ")")
@@ -209,17 +211,25 @@ object Corpus {
 
   private[Corpus] object _ParagraphType extends _ValueType[Paragraph] {
     val typeName:String = "blob"
+
     def set(stmt:PreparedStatement, i:Int, value:Paragraph):Unit = {
       val json = Json.stringify(value.toJSON)
-      val bytes = Snappy.compress(json)
-      stmt.setBytes(i, bytes)
+      val baos = new ByteArrayOutputStream()
+      using(new BZip2CompressorOutputStream(baos)) { out => out.write(json.getBytes(StandardCharsets.UTF_8)) }
+      stmt.setBytes(i, baos.toByteArray)
     }
+
     def get(rs:ResultSet, i:Int):Paragraph = {
       val bytes = rs.getBytes(i)
-      val json = Snappy.uncompressString(bytes)
+      val bais = new ByteArrayInputStream(bytes)
+      val json = using(new InputStreamReader(new BZip2CompressorInputStream(bais), StandardCharsets.UTF_8)) { in =>
+        readAllChars(in, bytes.length * 2)
+      }
       Paragraph.fromJSON(Json.parse(json).as[JsObject])
     }
+
     def hash(value:Paragraph):Int = value.id
+
     def equals(value1:Paragraph, value2:Paragraph):Boolean = value1.id == value2.id
   }
 

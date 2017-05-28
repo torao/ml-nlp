@@ -70,7 +70,7 @@ class Database(url:String, username:String, password:String) {
     def randomSelect(r: => Double):(K, V) = trx { con =>
       val count = con.head(s"select count(*) from $table")(_.getInt(1))
       val index = (count * r).toInt
-      con.head(s"select key, value from $table order by hash offset ?, 1", index) { rs =>
+      con.head(s"select key, value from $table order by hash limit ?, 1", index) { rs =>
         (keyType.get(rs, 1), valueType.get(rs, 2))
       }
     }

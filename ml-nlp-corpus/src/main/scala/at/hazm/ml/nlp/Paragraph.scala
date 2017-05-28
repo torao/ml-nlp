@@ -6,7 +6,7 @@ import play.api.libs.json.{JsArray, JsObject, Json}
 case class Paragraph(id:Int, sentences:Seq[Sentence]) {
   def toJSON:JsObject = Json.obj(
     "id" -> id,
-    "sentences" -> Json.arr(sentences.map(_.toJSON))
+    "sentences" -> JsArray(sentences.map(_.toJSON))
   )
 }
 
@@ -51,14 +51,14 @@ object Paragraph {
       "score" -> score,
       "head" -> head,
       "func" -> func,
-      "morphs" -> Json.arr(morphs.map(_.toJSON))
+      "morphs" -> JsArray(morphs.map(_.toJSON))
     )
   }
 
   case class Sentence(id:Int, clauses:Seq[Clause]) {
     def toJSON:JsObject = Json.obj(
       "id" -> id,
-      "clauses" -> Json.arr(clauses.map(_.toJSON))
+      "clauses" -> JsArray(clauses.map(_.toJSON))
     )
   }
 

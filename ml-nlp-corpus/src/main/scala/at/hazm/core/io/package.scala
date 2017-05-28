@@ -1,14 +1,9 @@
 package at.hazm.core
 
 import java.io._
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
 import java.nio.charset.{Charset, StandardCharsets}
-import java.nio.file.StandardOpenOption
-import java.sql.Timestamp
 import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
-import at.hazm.core.db._
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
 
 import scala.annotation.tailrec
@@ -29,6 +24,19 @@ package object io {
     using(r2) { x2 =>
       f(x1, x2)
     }
+  }
+
+  def readAllChars(in:Reader, bufferSize:Int = DefaultIOBufferSize):String = {
+    @tailrec
+    def _read(in:Reader, buf:Array[Char], buffer:StringBuilder):String = {
+      val len = in.read(buf)
+      if(len < 0) buffer.toString() else {
+        buffer.appendAll(buf, 0, len)
+        _read(in, buf, buffer)
+      }
+    }
+
+    _read(in, new Array[Char](bufferSize), new StringBuilder(bufferSize))
   }
 
   /**

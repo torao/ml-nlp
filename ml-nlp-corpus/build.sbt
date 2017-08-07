@@ -1,13 +1,15 @@
 organization := "at.hazm"
 
-name := "nlp-ml-corpus"
+name := "ml-nlp-corpus"
 
 version := "1.0.0"
 
-scalaVersion := "2.12.2"
+scalaVersion := "2.12.3"
 
 libraryDependencies ++= Seq(
   "org.scala-lang.modules" %% "scala-xml" % "1.0.6",
+  "org.apache.tomcat" % "tomcat-jdbc" % "8.5.+",
+  "com.h2database" % "h2" % "1.4.+",
   "org.xerial" % "sqlite-jdbc" % "3.16.1",
   "org.xerial.snappy" % "snappy-java" % "1.1.2.6",
   "org.apache.commons" % "commons-compress" % "1.8",

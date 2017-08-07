@@ -2,10 +2,11 @@ package at.hazm.core.db
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.sql.{Connection, DriverManager}
+import java.sql.Connection
 import java.util.concurrent.atomic.AtomicInteger
 
 import at.hazm.core.io.using
+import org.apache.tomcat.jdbc.pool.{DataSource, PoolProperties}
 import org.slf4j.LoggerFactory
 
 /**
@@ -15,14 +16,37 @@ import org.slf4j.LoggerFactory
   * @param username ユーザ名
   * @param password パスワード
   */
-class Database(url:String, username:String, password:String) {
+class Database(val url:String, val username:String, val password:String) extends AutoCloseable {
+
+  /**
+    * データソース。
+    */
+  private[this] val ds = {
+    val prop = new PoolProperties()
+    prop.setUrl(url)
+    prop.setUsername(username)
+    prop.setPassword(password)
+    prop.setJmxEnabled(true)
+    prop.setTestWhileIdle(false)
+    prop.setValidationInterval(3000)
+    prop.setRemoveAbandoned(true)
+    prop.setLogAbandoned(true)
+    prop.setInitialSize(1)
+    prop.setMaxActive(10)
+    new DataSource(prop)
+  }
 
   /**
     * 新しいデータベース接続を作成します。
     *
     * @return
     */
-  def newConnection:Connection = DriverManager.getConnection(url, username, password)
+  def newConnection:Connection = ds.getConnection
+
+  /**
+    * このデータベースが使用しているデータソースをクローズします。
+    */
+  override def close():Unit = ds.close()
 
   def trx[T](f:(Connection) => T):T = using(newConnection)(f)
 
@@ -147,7 +171,7 @@ object Database {
   private[Database] val logger = LoggerFactory.getLogger(classOf[Database])
 
   /**
-    * 指定された文字列をハッシュ化して返します。この機能は長い文字列に対して検索用のインデックスを作成するために使用します。」
+    * 指定された文字列をハッシュ化して返します。この機能は長い文字列に対して検索用のインデックスを作成するために使用します。
     *
     * @param value ハッシュ化する文字列
     * @return 文字列のハッシュ値
@@ -155,7 +179,7 @@ object Database {
   def makeHash(value:String):Int = makeHash(value.take(50).getBytes(StandardCharsets.UTF_8))
 
   /**
-    * 指定された文字列をハッシュ化して返します。この機能は長い文字列に対して検索用のインデックスを作成するために使用します。」
+    * 指定された文字列をハッシュ化して返します。この機能は長い文字列に対して検索用のインデックスを作成するために使用します。
     *
     * @param value ハッシュ化する文字列
     * @return 文字列のハッシュ値

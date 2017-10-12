@@ -4,14 +4,14 @@ name := "nlp-ml"
 
 version := "1.0.0"
 
-scalaVersion := "2.12.2"
+scalaVersion := "2.12.3"
 
 resolvers ++= Seq(
   "CodeLibs Repository" at "http://maven.codelibs.org/"
 )
 
 libraryDependencies ++= Seq(
-  "at.hazm" % "ml-nlp-corpus" % "1.0.0",
+  "at.hazm" %% "ml-nlp-corpus" % "1.0.+",
   "com.typesafe" % "config" % "1.3.1",
   "org.scala-lang.modules" %% "scala-xml" % "1.0.6",
   "org.codelibs" % "lucene-analyzers-kuromoji-ipadic-neologd" % "5.3.1-20151231",

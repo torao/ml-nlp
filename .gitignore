@@ -4,6 +4,7 @@
 *.zip
 *.bz2
 *.db
+*.iml
 
 # sbt specific
 .cache

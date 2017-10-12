@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.sql.{PreparedStatement, ResultSet}
 import java.util.concurrent.atomic.AtomicInteger
 
-import at.hazm.core.db.{LocalDB, _}
+import at.hazm.core.db._
 import at.hazm.core.io.{readAllChars, using}
 import at.hazm.ml.nlp.Corpus._ParagraphType
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
@@ -45,10 +45,10 @@ class Corpus(val db:LocalDB, val namespace:String) {
     db.trx { con =>
       // コーパステーブルの作成
       con.createTable(
-        s"""$table(id integer not null primary key, surface text not null,
-           |pos1 text not null, pos2 text not null, pos3 text not null, pos4 text not null,
-           |conj_type text not null, conj_form text not null, base text not null,
-           |reading text not null, pronunciation text not null)""".stripMargin)
+        s"""$table(id integer not null primary key, surface varchar(30) not null,
+           |pos1 varchar(15) not null, pos2 varchar(15) not null, varchar(15) text not null, pos4 varchar(15) not null,
+           |conj_type varchar(30) not null, conj_form varchar(30) not null, base varchar(30) not null,
+           |reading varchar(60) not null, pronunciation varchar(60) not null)""".stripMargin)
       con.exec(s"create unique index if not exists ${table}_idx00 on $table(surface, pos1, pos2, pos3, pos4)")
       this.sequence.set(con.head(s"select count(*) from $table")(_.getInt(1)))
 

@@ -5,9 +5,11 @@ import java.nio.charset.{Charset, StandardCharsets}
 import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
+import org.slf4j.LoggerFactory
 
 import scala.annotation.tailrec
 import scala.language.reflectiveCalls
+import scala.collection.mutable
 
 package object io {
   type CLOSEABLE = {def close():Unit}
@@ -143,7 +145,132 @@ package object io {
   }
 
   def writeText[T](file:File, append:Boolean = false, charset:Charset = StandardCharsets.UTF_8, bufferSize:Int = 0)(f:(PrintWriter) => T):T = writeBinary(file, append, bufferSize) { os =>
-    f(new PrintWriter(new OutputStreamWriter(os, charset)))
+    val out = new PrintWriter(new OutputStreamWriter(os, charset))
+    val result = f(out)
+    out.flush()
+    result
+  }
+
+
+  object text {
+    private[this] val logger = LoggerFactory.getLogger(getClass.getName.dropRight(1))
+    trait CloseableIterator[T] extends Iterator[T] with AutoCloseable
+
+    private[io] def parser(_in:Reader, fieldSeparator:Char):CloseableIterator[Seq[String]] = new CloseableIterator[Seq[String]]() {
+      private[this] val in = new at.hazm.core.io.LineNumberReader(_in, 100)
+      private[this] var cache:Option[Seq[String]] = None
+      private[this] var closed = false
+
+      override def close():Unit = {
+        closed = true
+        in.close()
+      }
+
+      override def hasNext:Boolean = cache match {
+        case Some(_) => true
+        case None =>
+          cache = purge()
+          cache.isDefined
+      }
+
+      override def next():Seq[String] = cache match {
+        case Some(value) =>
+          cache = None
+          value
+        case None =>
+          purge().get
+      }
+
+      private[this] def eof:Boolean = if(closed) true else {
+        val c = in.read()
+        if(c < 0) true else {
+          in.unread(c)
+          false
+        }
+      }
+
+      private[this] def eol:Boolean = if(closed) true else {
+        val c1 = in.read()
+        if(c1 < 0) true else if(c1 == '\n') true else if(c1 == '\r') {
+          val c2 = in.read()
+          if(c2 == '\n') true else {
+            in.unread(c2)
+            true
+          }
+        } else {
+          in.unread(c1)
+          false
+        }
+      }
+
+      private[this] def purge():Option[Seq[String]] = {
+        @tailrec
+        def _readField(quoted:Boolean, buffer:StringBuilder):(String, Int) = if(eof) {
+          (buffer.toString(), -1)
+        } else if(!quoted && eol) {
+          (buffer.toString(), '\n')
+        } else (quoted, in.read()) match {
+          case (true, eof) if eof < 0 =>
+            logger.warn(f"eof detected while reading quoted field: $buffer")
+            (buffer.toString(), eof)
+          case (true, '\"') =>
+            if(eof) {
+              logger.warn(f"eof detected while reading quoted field: $buffer")
+              (buffer.toString(), -1)
+            } else if(eol) {
+              (buffer.toString(), '\n')
+            } else in.read() match {
+              case '\"' =>
+                buffer.append("\"")
+                _readField(quoted, buffer)
+              case eof if eof == fieldSeparator =>
+                (buffer.toString(), eof)
+              case ch2 =>
+                logger.warn(s"[${in.line+1}:${in.column+1}]: double-quote expect: $buffer${ch2.toChar}")
+                buffer.append("\"")
+                buffer.append(ch2.toChar)
+                _readField(quoted = false, buffer)
+            }
+          case (true, c) =>
+            buffer.append(c.toChar)
+            _readField(quoted, buffer)
+          case (false, eof) if eof < 0 || eof == fieldSeparator =>
+            (buffer.toString(), eof)
+          case (false, '\"') if buffer.isEmpty =>
+            _readField(quoted = true, buffer)
+          case (false, c) =>
+            buffer.append(c.toChar)
+            _readField(quoted, buffer)
+        }
+
+        def _read(row:mutable.Buffer[String]):Option[Seq[String]] = {
+          val (field, ch) = _readField(quoted = false, new StringBuilder())
+          row.append(field)
+          if(ch == fieldSeparator) {
+            _read(row)
+          } else if(ch == '\n') {
+            Some(row)
+          } else if(ch < 0) {
+            if(row.size == 1 && field.isEmpty) None else Some(row)
+          } else throw new IllegalStateException(ch.toString)
+        }
+
+        _read(mutable.Buffer[String]())
+      }
+    }
+  }
+
+  object csv {
+    def quote(value:Any):String = value match {
+      case text:String => "\"" + text.replace("\"", "\"\"") + "\""
+      case i => i.toString
+    }
+
+    def parse(in:Reader):text.CloseableIterator[Seq[String]] = text.parser(in, ',')
+  }
+
+  object tsv {
+    def parse(in:Reader):text.CloseableIterator[Seq[String]] = text.parser(in, '\t')
   }
 
 }

@@ -1,5 +1,6 @@
 package at.hazm.core.util
 
+import java.util.concurrent.atomic.AtomicLong
 import java.util.{Timer, TimerTask}
 
 import at.hazm.core.util.Diagnostics.Performance
@@ -39,7 +40,7 @@ object Diagnostics {
   def measureAsync[T](id:String)(f: => Future[T]):Future[T] = {
     import scala.concurrent.ExecutionContext.Implicits.global
     val t0 = System.currentTimeMillis()
-    f.andThen{ case _ =>
+    f.andThen { case _ =>
       val t = System.currentTimeMillis() - t0
       val p = diagnostics.get().performance.getOrElseUpdate(id, new Performance())
       p.callCount += 1
@@ -49,9 +50,25 @@ object Diagnostics {
     }
   }
 
-   class Progress(prefix:String, init:Long, max:Long, interval:Long = 60 * 1000L) {
+  /**
+    * 処理の進捗状況を表示するためのクラス。
+    * {{{
+    *   val prog = new Progress(file.getName, 0, file.length)
+    *   while(...){
+    *     prog.report(current, data)
+    *   }
+    * }}}
+    * ファイル入力を進捗表示するには [[at.hazm.core.io.ProgressInputStream]] を使用してください。
+    *
+    * @param prefix   ログのプレフィクス
+    * @param init     開始時の初期値
+    * @param max      与えられうる最大値
+    * @param interval ログ出力間隔 (ミリ秒)
+    */
+  class Progress(prefix:String, init:Long, max:Long, interval:Long = 60 * 1000L) {
     private[this] val diag = diagnostics.get()
     private[this] val t0 = System.currentTimeMillis()
+    private[this] val _current = new AtomicLong(0L)
     private[this] val task = new TimerTask {
       override def run():Unit = print()
     }
@@ -61,12 +78,42 @@ object Diagnostics {
 
     timer.scheduleAtFixedRate(task, interval, interval)
 
+    /**
+      * 現在の進捗値を参照します。
+      */
+    def current:Long = _current.get()
+
+    /**
+      * 指定された状況メッセージをレポートします。このメソッドは進捗値をインクリメントします。
+      *
+      * @param message 状況メッセージ
+      */
+    def report(message:String):Unit = _report(_current.incrementAndGet(), message)
+
+    /**
+      * 指定された進捗値を現在の進捗として状況メッセージをレポートします。
+      *
+      * @param current 進捗
+      * @param message 状況メッセージ
+      */
     def report(current:Long, message:String):Unit = {
+      this._current.set(current)
+      _report(current, message)
+    }
+
+    def report():Unit = report("")
+
+    def report(current:Long):Unit = report(current, "")
+
+    private[this] def _report(current:Long, message:String = ""):Unit = {
+      this._current.set(current)
       diag.report.current = current
       diag.report.message = message
       diag.report.tm = System.currentTimeMillis()
       if(current == max) {
         stop()
+        print()
+      } else if(current == init + 1) {
         print()
       }
     }
@@ -97,13 +144,14 @@ object Diagnostics {
         if(a.isInfinity || b.isInfinite) {
           s"終了予想時間計測中"
         } else {
-          val t = ((max - b) / a).toLong  // 終了予想時刻
+          val t = ((max - b) / a).toLong // 終了予想時刻
           s"残り ${intervalString(t - tm)}"
         }
       }
-      logger.info(f"$prefix: $current%,d / $max%,d (${current * 100.0 / max}%.1f%%) $time: $message")
-      if(diag.performance.nonEmpty){
-        logger.info(diag.performance.map{ case (id, p) => f"$id:avr=${p.totalTime/p.callCount}%,dms,min=${p.min}%,dms,max=${p.max}%,dms/${p.callCount}%,dcall" }.mkString(" "))
+      val msg = if(message.isEmpty) "" else s": $message"
+      logger.info(f"$prefix: $current%,d / $max%,d (${current * 100.0 / max}%.1f%%) $time$msg")
+      if(diag.performance.nonEmpty) {
+        logger.info(diag.performance.map { case (id, p) => f"$id:avr=${p.totalTime / p.callCount}%,dms,min=${p.min}%,dms,max=${p.max}%,dms/${p.callCount}%,dcall" }.mkString(" "))
       }
     }
 

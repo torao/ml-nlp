@@ -1,10 +1,14 @@
+/* scala combine.scala wikipedia/ jawiki-20170420-pagers-articles.tsv.gz
+ * wikiextract によって抽出され wikipedia/AA/ のようなディレクトリに分割保存された内容を結合する。
+*/
+
 import java.io._
 import scala.io._
 import java.util.zip._
 
-val dir = new File(".")
+val dir = new File(args(0))
 
-def listFiles(parent:File = new File(".")):List[File] = {
+def listFiles(parent:File = dir):List[File] = {
   parent.listFiles.flatMap{
     case file if file.isFile => Nil
     case dir if dir.isDirectory =>
@@ -13,7 +17,8 @@ def listFiles(parent:File = new File(".")):List[File] = {
 }
 
 //val out = new BufferedWriter(new OutputStreamWriter(System.out))
-val out = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream("enwiki-20170420-pagers-articles.tsv.gz")), "UTF-8"))
+val out = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(args(1))), "UTF-8"))
+out.write("PAGE-ID\tTITLE\tCONTENT")
 
 def flush(out:Writer, id:Int, title:String, text:String):Unit = out.write(s"$id\t$title\t$text\n")
 

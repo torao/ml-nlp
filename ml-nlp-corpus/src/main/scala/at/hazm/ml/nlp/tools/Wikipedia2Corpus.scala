@@ -13,6 +13,10 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.ExecutionContext
 
+/**
+  * @deprecated ml-nlp-extract を使用してください。
+  * @param file データベースファイル
+  */
 class Wikipedia2Corpus(file:File) {
   import Wikipedia2Corpus.logger
 

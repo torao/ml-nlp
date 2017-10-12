@@ -3,7 +3,7 @@ package at.hazm.core.io
 import java.io.{File, FileInputStream, FilterInputStream, InputStream}
 
 class ProgressInputStream(_in:InputStream, callback:(Long)=>Unit) extends FilterInputStream(_in) {
-  private[this] var position = 0
+  private[this] var position = 0L
 
   def this(file:File, callback:(Long)=>Unit) = this(new FileInputStream(file), callback)
 

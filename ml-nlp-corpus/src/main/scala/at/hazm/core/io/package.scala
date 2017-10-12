@@ -39,6 +39,25 @@ package object io {
     _read(in, new Array[Char](bufferSize), new StringBuilder(bufferSize))
   }
 
+  def readAllBytes(in:InputStream, bufferSize:Int = DefaultIOBufferSize):Array[Byte] = {
+    val out = new ByteArrayOutputStream()
+    copy(in, out, bufferSize)
+    out.toByteArray
+  }
+
+  def copy(in:InputStream, out:OutputStream, bufferSize:Int = DefaultIOBufferSize):Unit = {
+    @tailrec
+    def _copy(in:InputStream, out:OutputStream, buffer:Array[Byte]):Unit = {
+      val len = in.read(buffer)
+      if(len >= 0) {
+        out.write(buffer, 0, len)
+        _copy(in, out, buffer)
+      }
+    }
+
+    _copy(in, out, new Array[Byte](bufferSize))
+  }
+
   /**
     * 指定されたファイルを読み出し用にオープンします。ファイル名が .gz または .bz2 を持つ場合は圧縮の解除を行った入力ストリームを構築
     * します。

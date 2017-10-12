@@ -35,6 +35,9 @@ package object db {
     case arg:java.util.Date => f"$arg%tFT$arg%tT.$arg%tL"
     case Some(arg) => sqlValue(arg)
     case None => "None"
+    case bin:Array[_] if bin.getClass.getComponentType == classOf[Byte] =>
+      (if(bin.length <= 25) bin else bin.take(25)).collect{case b:Byte => f"$b%02X"}.mkString +
+        (if(bin.length > 25) "..." else "") + f":${bin.length}%,d"
     case arg => arg.toString
   }
 

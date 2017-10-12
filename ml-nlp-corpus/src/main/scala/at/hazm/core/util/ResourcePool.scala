@@ -48,7 +48,7 @@ class ResourcePool[T](size:Int, factory:Factory[T]) extends AutoCloseable {
   }
 
   /**
-    * このリソースプールからリソースを [[scala.concurrent.ExecutionContext]] を使用して処理を実行します。プール内のすべてのリソース
+    * このリソースプールからリソースを `ExecutionContext` を使用して処理を実行します。プール内のすべてのリソース
     * が使用中の場合は処理がブロックされます。
     *
     * @param f        リソースに対して実行する処理
@@ -68,7 +68,7 @@ class ResourcePool[T](size:Int, factory:Factory[T]) extends AutoCloseable {
   }
 
   /**
-    * このリソースプールが確保しているリソースをすべて開放し以後の [[acquire()]] 要求を受け付けないようにします。
+    * このリソースプールが確保しているリソースをすべて開放し以後の `acquire()` 要求を受け付けないようにします。
     */
   override def close():Unit = if(closed.compareAndSet(false, true)) {
     pool.asScala.foreach(r => factory.dispose(r))

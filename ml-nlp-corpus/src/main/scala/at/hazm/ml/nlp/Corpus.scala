@@ -9,7 +9,6 @@ import at.hazm.core.db.{LocalDB, _}
 import at.hazm.core.io.{readAllChars, using}
 import at.hazm.ml.nlp.Corpus._ParagraphType
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
-import org.xerial.snappy.Snappy
 import play.api.libs.json.{JsObject, Json}
 
 /**

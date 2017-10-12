@@ -2,8 +2,9 @@ package at.hazm.ml.nlp.word2vec
 
 import java.io.File
 
+import at.hazm.core.db.BlobStore
+import at.hazm.ml.nlp.Corpus
 import at.hazm.ml.nlp.dl4j._
-import at.hazm.ml.nlp.pipeline.Pipeline
 import org.deeplearning4j.models.embeddings.loader.WordVectorSerializer
 import org.deeplearning4j.models.word2vec.{Word2Vec => DL4JW2V}
 import org.deeplearning4j.text.tokenization.tokenizerfactory.DefaultTokenizerFactory
@@ -19,8 +20,8 @@ class Word2Vec private(model:DL4JW2V) {
 
 object Word2Vec {
 
-  def create(file:File, pipeline:Pipeline[Seq[Int], _]):Word2Vec = {
-    val it = pipeline.asSentenceIterator
+  def create(fs:BlobStore#Entry, corpus:Corpus):Word2Vec = {
+    val it = new CorpusIterator(corpus)
     val tf = new DefaultTokenizerFactory()
 
     val model = new DL4JW2V.Builder()
@@ -34,12 +35,16 @@ object Word2Vec {
       .build
     model.fit()
 
-    WordVectorSerializer.writeWord2VecModel(model, file)
+    fs.save{ file =>
+      WordVectorSerializer.writeWord2VecModel(model, file)
+    }
     new Word2Vec(model)
   }
 
-  def load(file:File):Word2Vec = {
-    val model = WordVectorSerializer.readWord2VecModel(file)
+  def load(fs:BlobStore#Entry):Word2Vec = {
+    val model = fs.load { file =>
+      WordVectorSerializer.readWord2VecModel(file)
+    }
     new Word2Vec(model)
   }
 }

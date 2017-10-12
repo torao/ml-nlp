@@ -4,6 +4,14 @@ import at.hazm.ml.nlp.Paragraph.Sentence
 import play.api.libs.json.{JsArray, JsObject, Json}
 
 case class Paragraph(id:Int, sentences:Seq[Sentence]) {
+
+  /**
+    * このパラグラフに含まれるすべての形態素インデックスを文内の出現順に並べたものを返します。
+    *
+    * @return 文の形態素インデックス
+    */
+  def toIndices:Seq[Int] = sentences.flatMap(_.clauses.flatMap(_.morphs.map(_.morphId)))
+
   def toJSON:JsObject = Json.obj(
     "id" -> id,
     "sentences" -> JsArray(sentences.map(_.toJSON))
@@ -14,10 +22,10 @@ object Paragraph {
 
   def fromJSON(json:JsObject):Paragraph = Paragraph(
     id = (json \ "id").as[Int],
-    sentences = (json \ "sentences").as[JsArray].value.map{ sentence =>
+    sentences = (json \ "sentences").as[JsArray].value.map { sentence =>
       Sentence(
         id = (sentence \ "id").as[Int],
-        clauses = (sentence \ "clauses").as[JsArray].value.map{ clause =>
+        clauses = (sentence \ "clauses").as[JsArray].value.map { clause =>
           Clause(
             id = (clause \ "id").as[Int],
             link = (clause \ "link").as[Int],
@@ -25,7 +33,7 @@ object Paragraph {
             score = (clause \ "score").as[Double],
             head = (clause \ "head").as[Int],
             func = (clause \ "func").as[Int],
-            morphs = (clause \ "morphs").as[JsArray].value.map{ morph =>
+            morphs = (clause \ "morphs").as[JsArray].value.map { morph =>
               MorphIndex(
                 id = (morph \ "id").as[Int],
                 morphId = (morph \ "morph").as[Int],

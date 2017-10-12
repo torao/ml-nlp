@@ -1,7 +1,5 @@
 package at.hazm.ml.nlp
 
-import java.io.{BufferedReader, Reader, StringReader}
-
 import at.hazm.ml.nlp.ja.CaboCha
 import at.hazm.core.io.using
 
@@ -56,31 +54,6 @@ object Token {
       Token(t.term, s"${t.pos1}-${t.pos2}-${t.pos3}-${t.pos4}")
     }
   }
-
-
-  /**
-    * 指定された入力ストリームからテキストを読み込んで形態素解析して返します。
-    *
-    * @param r テキストを読み込むストリーム
-    * @return 形態素解析した結果
-    */
-  /*
-  def parse(in:Reader):Seq[Token] = {
-    val tk = new JapaneseTokenizer(null, false, JapaneseTokenizer.Mode.NORMAL)
-    val base = tk.addAttribute(classOf[BaseFormAttribute])
-    val term = tk.addAttribute(classOf[CharTermAttribute])
-    val pos = tk.addAttribute(classOf[PartOfSpeechAttribute])
-    val inflection = tk.addAttribute(classOf[InflectionAttribute])
-    val reading = tk.addAttribute(classOf[ReadingAttribute])
-    tk.setReader(in)
-    tk.reset()
-    val tokens = mutable.Buffer[Token]()
-    while(tk.incrementToken()) {
-      tokens.append(Token(term.toString, pos.getPartOfSpeech, Option(base.getBaseForm), Option(inflection.getInflectionForm), Option(reading.getReading)))
-    }
-    tokens
-  }
-  */
 
   /** 形態素と一致判定を行うパターン */
   private[nlp] class Pattern(term:Option[String], pos:Option[String]) {

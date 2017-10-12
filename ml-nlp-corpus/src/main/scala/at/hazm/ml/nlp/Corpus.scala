@@ -17,9 +17,9 @@ import play.api.libs.json.{JsObject, Json}
   * @param db        テキストを保存するデータベース
   * @param namespace 同一データベース内でコーパスを区別するための名前空間
   */
-class Corpus(val db:LocalDB, val namespace:String) {
+class Corpus(val db:Database, val namespace:String) {
 
-  def this(db:LocalDB) = this(db, "")
+  def this(db:Database) = this(db, "")
 
   def this(file:File, namespace:String) = this(new LocalDB(file), namespace)
 
@@ -45,15 +45,15 @@ class Corpus(val db:LocalDB, val namespace:String) {
     db.trx { con =>
       // コーパステーブルの作成
       con.createTable(
-        s"""$table(id integer not null primary key, surface varchar(30) not null,
-           |pos1 varchar(15) not null, pos2 varchar(15) not null, varchar(15) text not null, pos4 varchar(15) not null,
-           |conj_type varchar(30) not null, conj_form varchar(30) not null, base varchar(30) not null,
-           |reading varchar(60) not null, pronunciation varchar(60) not null)""".stripMargin)
-      con.exec(s"create unique index if not exists ${table}_idx00 on $table(surface, pos1, pos2, pos3, pos4)")
+        s"""$table(id INTEGER NOT NULL PRIMARY KEY, surface VARCHAR(30) NOT NULL,
+           |pos1 VARCHAR(15) NOT NULL, pos2 VARCHAR(15) NOT NULL, VARCHAR(15) text NOT NULL, pos4 VARCHAR(15) NOT NULL,
+           |conj_type VARCHAR(30) NOT NULL, conj_form VARCHAR(30) NOT NULL, base VARCHAR(30) NOT NULL,
+           |reading VARCHAR(60) NOT NULL, pronunciation VARCHAR(60) NOT NULL)""".stripMargin)
+      con.exec(s"CREATE UNIQUE INDEX IF NOT EXISTS ${table}_idx00 ON $table(surface, pos1, pos2, pos3, pos4)")
       this.sequence.set(con.head(s"select count(*) from $table")(_.getInt(1)))
 
       // コーパスの整合性を確認
-      if(con.head(s"select count(*) from $table where id < 0 or id >= ?", sequence.get())(_.getInt(1)) > 0) {
+      if(con.head(s"SELECT COUNT(*) FROM $table WHERE id < 0 OR id >= ?", sequence.get())(_.getInt(1)) > 0) {
         throw new IllegalStateException(s"vocabulary id conflict in $table (perhaps some morphs removed?)")
       }
     }
@@ -72,7 +72,7 @@ class Corpus(val db:LocalDB, val namespace:String) {
       * @return 形態素
       */
     def get(id:Int):Option[Morph] = db.trx { con =>
-      con.headOption(s"select * from $table where idx = ?", id)(rs2Morph)
+      con.headOption(s"SELECT * FROM $table WHERE idx = ?", id)(rs2Morph)
     }
 
     /**
@@ -82,7 +82,7 @@ class Corpus(val db:LocalDB, val namespace:String) {
       * @return ID -> 形態素 を示す Map
       */
     def getAll(ids:Seq[Int]):Map[Int, Morph] = db.trx { con =>
-      con.query(s"select * from $table where idx in (${ids.distinct.mkString(",")})") { rs =>
+      con.query(s"SELECT * FROM $table WHERE idx IN (${ids.distinct.mkString(",")})") { rs =>
         (rs.getInt("id"), rs2Morph(rs))
       }.toMap
     }
@@ -95,7 +95,7 @@ class Corpus(val db:LocalDB, val namespace:String) {
       * @return 形態素の ID、未登録の場合は負の値
       */
     def indexOf(morph:Morph):Int = db.trx { con =>
-      con.headOption(s"select id from $table where term=? and pos1=? and pos2=? and pos3=? and pos4=?",
+      con.headOption(s"SELECT id FROM $table WHERE term=? AND pos1=? AND pos2=? AND pos3=? AND pos4=?",
         morph.surface, morph.pos1, morph.pos2, morph.pos3, morph.pos4)(_.getInt(1)).getOrElse(-1)
     }
 
@@ -112,7 +112,7 @@ class Corpus(val db:LocalDB, val namespace:String) {
         val where = ms.map { morph =>
           s"surface=${literal(morph.surface)} and pos1=${literal(morph.pos1)} and pos2=${literal(morph.pos2)} and pos3=${literal(morph.pos3)} and pos4=${literal(morph.pos4)}"
         }.mkString("(", ") or (", ")")
-        con.query(s"select * from $table where $where") { rs =>
+        con.query(s"SELECT * FROM $table WHERE $where") { rs =>
           val id = rs.getInt("id")
           val morph = rs2Morph(rs)
           (morph.key, id)
@@ -169,7 +169,7 @@ class Corpus(val db:LocalDB, val namespace:String) {
 
       if(newbies.nonEmpty) {
         db.trx { con =>
-          con.exec(s"insert into $table(id,surface,pos1,pos2,pos3,pos4,conj_type,conj_form,base,reading,pronunciation) values${newbies.map(_._3).mkString(",")}")
+          con.exec(s"INSERT INTO $table(id,surface,pos1,pos2,pos3,pos4,conj_type,conj_form,base,reading,pronunciation) VALUES${newbies.map(_._3).mkString(",")}")
         }
       }
 
@@ -185,7 +185,7 @@ class Corpus(val db:LocalDB, val namespace:String) {
       * @return 単語のインデックス、または負の値
       */
     def indexOf(term:String):Int = db.trx { con =>
-      con.headOption(s"select idx from $table where term=?", term)(_.getInt(1)).getOrElse(-1)
+      con.headOption(s"SELECT idx FROM $table WHERE term=?", term)(_.getInt(1)).getOrElse(-1)
     }
 
     /**
@@ -195,7 +195,7 @@ class Corpus(val db:LocalDB, val namespace:String) {
       * @return 取得した (ID,単語) のリスト
       */
     def prefixed(prefix:String):List[(Int, String)] = db.trx { con =>
-      con.query(s"select idx, term from $table where term like '%' || ?", prefix) { rs => (rs.getInt(1), rs.getString(2)) }.toList
+      con.query(s"SELECT idx, term FROM $table WHERE term LIKE '%' || ?", prefix) { rs => (rs.getInt(1), rs.getString(2)) }.toList
     }
   }
 

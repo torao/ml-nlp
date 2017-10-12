@@ -9,22 +9,41 @@ import org.slf4j.LoggerFactory
 package object db {
   private[db] val logger = LoggerFactory.getLogger("at.hazm.core.db.SQL")
 
+  var millisecToWarnSlowQuery:Long = 10 * 1000L
+
+  private[this] sealed abstract class LogLevel(_log:(String) => Unit, _check: => Boolean) {
+    def isEnabled:Boolean = _check
+
+    def log(msg:String):Unit = _log(msg)
+  }
+
+  private[this] case object ERROR extends LogLevel(logger.error, logger.isErrorEnabled)
+
+  private[this] case object WARN extends LogLevel(logger.warn, logger.isWarnEnabled)
+
+  private[this] case object INFO extends LogLevel(logger.info, logger.isInfoEnabled)
+
   private[db] def log[T](sql:String, args:Seq[Any])(f: => T):T = {
     val t0 = System.currentTimeMillis()
     try {
       val result = f
-      sqlLog(sql, args, System.currentTimeMillis() - t0, sqlValue(result))
+      val tm = System.currentTimeMillis() - t0
+      if(tm < millisecToWarnSlowQuery) {
+        sqlLog(sql, args, tm, sqlValue(result), INFO)
+      } else {
+        sqlLog(sql, args, tm, sqlValue(result) + " (slow query)", WARN)
+      }
       result
     } catch {
       case ex:Throwable =>
-        sqlLog(sql, args, System.currentTimeMillis() - t0, ex.toString)
+        sqlLog(sql, args, System.currentTimeMillis() - t0, ex.toString, ERROR)
         throw ex
     }
   }
 
-  private[db] def sqlLog(sql:String, args:Seq[Any], msec:Long, result:String):Unit = {
+  private[db] def sqlLog(sql:String, args:Seq[Any], msec:Long, result:String, level:LogLevel):Unit = if(level.isEnabled){
     val _args = if(args.isEmpty) "" else args.map(sqlValue).mkString(" [", ", ", "]")
-    logger.info(f"$sql%s;${_args} ${if(msec >= 0) f"$msec%,d" else "***"}ms => $result")
+    level.log(f"$sql%s;${_args} ${if(msec >= 0) f"$msec%,d" else "***"}ms => $result")
   }
 
   private[db] def sqlValue(value:Any):String = value match {
@@ -56,10 +75,17 @@ package object db {
         val stmt = con.prepareStatement(sql)
         args.zipWithIndex.foreach { case (arg, i) => stmt.setObject(i + 1, arg) }
         val rs = stmt.executeQuery()
-        new Cursor[T](converter, rs, stmt, () => sqlLog(sql, args, System.currentTimeMillis() - t0, ""))
+        new Cursor[T](converter, rs, stmt, {() =>
+          val tm = System.currentTimeMillis() - t0
+          if(tm < millisecToWarnSlowQuery){
+            sqlLog(sql, args, tm, "", INFO)
+          } else {
+            sqlLog(sql, args, tm, "(slow query)", WARN)
+          }
+        })
       } catch {
         case ex:Throwable =>
-          sqlLog(sql, args, System.currentTimeMillis() - t0, ex.toString)
+          sqlLog(sql, args, System.currentTimeMillis() - t0, ex.toString, ERROR)
           throw ex
       }
     }
@@ -75,14 +101,14 @@ package object db {
       }
     }
 
-    def exec(sql:String, args:Any*):Int = using(con.prepareStatement(sql)) { stmt =>
-      log(sql, args) {
+    def exec(sql:String, args:Any*):Int = log(sql, args) {
+      using(con.prepareStatement(sql)) { stmt =>
         args.zipWithIndex.foreach { case (arg, i) => stmt.setObject(i + 1, arg) }
         stmt.executeUpdate()
       }
     }
 
-    def createTable[T](sql:String):Boolean = exec(s"create table if not exists $sql") > 0
+    def createTable[T](sql:String):Boolean = exec(s"CREATE TABLE IF NOT EXISTS $sql") > 0
   }
 
   class Cursor[T] private[db](converter:(ResultSet) => T, rs:ResultSet, r:AutoCloseable*) extends Iterator[T] with AutoCloseable {
@@ -149,18 +175,27 @@ package object db {
 
   trait _ValueType[T] {
     val typeName:String
+
     def set(stmt:PreparedStatement, i:Int, value:T):Unit
+
     def get(rs:ResultSet, i:Int):T
+
     def hash(value:T):Int
+
     def equals(value1:T, value2:T):Boolean
   }
 
   trait _ValueTypeForStringColumn[T] extends _ValueType[T] {
     val typeName:String = "text"
+
     def set(stmt:PreparedStatement, i:Int, value:T):Unit = stmt.setString(i, to(value))
+
     def get(rs:ResultSet, i:Int):T = from(rs.getString(i))
+
     def hash(value:T):Int = makeHash(to(value))
+
     def equals(value1:T, value2:T):Boolean = to(value1) == to(value2)
+
     def from(text:String):T
 
     def to(value:T):String
@@ -168,10 +203,15 @@ package object db {
 
   trait _ValueTypeForBinaryColumn[T] extends _ValueType[T] {
     val typeName:String = "blob"
+
     def set(stmt:PreparedStatement, i:Int, value:T):Unit = stmt.setBytes(i, to(value))
+
     def get(rs:ResultSet, i:Int):T = from(rs.getBytes(i))
+
     def hash(value:T):Int = makeHash(to(value))
+
     def equals(value1:T, value2:T):Boolean = to(value1) sameElements to(value2)
+
     def from(text:Array[Byte]):T
 
     def to(value:T):Array[Byte]

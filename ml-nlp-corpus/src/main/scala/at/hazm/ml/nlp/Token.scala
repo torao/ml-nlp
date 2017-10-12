@@ -1,20 +1,18 @@
 package at.hazm.ml.nlp
 
-import java.io.{BufferedReader, Reader, StringReader}
-
-import at.hazm.ml.nlp.ja.CaboCha
 import at.hazm.core.io.using
+import at.hazm.ml.nlp.ja.CaboCha
 
 import scala.collection.mutable
 
 /**
   * 形態素を表すクラスです。
   *
-  * @param term        入力単語
-  * @param pos         ハイフンでレベルを区切られた品詞
-  * @param base        基本形
-  * @param inflection  変化形
-  * @param reading     読み
+  * @param term       入力単語
+  * @param pos        ハイフンでレベルを区切られた品詞
+  * @param base       基本形
+  * @param inflection 変化形
+  * @param reading    読み
   */
 case class Token(term:String, pos:String, base:Option[String], inflection:Option[String], reading:Option[String]) {
   private[this] lazy val _pos = pos.split("-").toList
@@ -50,37 +48,12 @@ object Token {
     * @param text 形態素解析する文字列
     * @return 形態素解析した結果
     */
-  def parse(text:String):Seq[Token] = using(new CaboCha()){ cabocha =>
-    cabocha.parse(text).chunks.flatMap(_.tokens).map{ t =>
+  def parse(text:String):Seq[Token] = using(new CaboCha()) { cabocha =>
+    cabocha.parse(text).chunks.flatMap(_.tokens).map { t =>
       // term:String, pos:String, base:Option[String], inflection:Option[String], reading:Option[String]
       Token(t.term, s"${t.pos1}-${t.pos2}-${t.pos3}-${t.pos4}")
     }
   }
-
-
-  /**
-    * 指定された入力ストリームからテキストを読み込んで形態素解析して返します。
-    *
-    * @param r テキストを読み込むストリーム
-    * @return 形態素解析した結果
-    */
-  /*
-  def parse(in:Reader):Seq[Token] = {
-    val tk = new JapaneseTokenizer(null, false, JapaneseTokenizer.Mode.NORMAL)
-    val base = tk.addAttribute(classOf[BaseFormAttribute])
-    val term = tk.addAttribute(classOf[CharTermAttribute])
-    val pos = tk.addAttribute(classOf[PartOfSpeechAttribute])
-    val inflection = tk.addAttribute(classOf[InflectionAttribute])
-    val reading = tk.addAttribute(classOf[ReadingAttribute])
-    tk.setReader(in)
-    tk.reset()
-    val tokens = mutable.Buffer[Token]()
-    while(tk.incrementToken()) {
-      tokens.append(Token(term.toString, pos.getPartOfSpeech, Option(base.getBaseForm), Option(inflection.getInflectionForm), Option(reading.getReading)))
-    }
-    tokens
-  }
-  */
 
   /** 形態素と一致判定を行うパターン */
   private[nlp] class Pattern(term:Option[String], pos:Option[String]) {
@@ -228,7 +201,7 @@ object Token {
     private[this] def notMatches(tokens:Seq[Token], fromIndex:Int = 0):Stream[(Int, Int)] = {
       val i = indexOf(tokens, fromIndex)
       if(i < 0) {
-        (fromIndex, tokens.length) #:: Stream.empty[(Int,Int)]
+        (fromIndex, tokens.length) #:: Stream.empty[(Int, Int)]
       } else {
         (fromIndex, i) #:: notMatches(tokens, i + pattern.length)
       }

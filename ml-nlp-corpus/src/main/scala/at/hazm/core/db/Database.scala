@@ -29,9 +29,11 @@ class Database(val url:String, val username:String, val password:String) extends
     prop.setJmxEnabled(true)
     prop.setTestWhileIdle(false)
     prop.setValidationInterval(3000)
-    prop.setRemoveAbandoned(true)
+    prop.setRemoveAbandoned(false)    // NOTE: 単一スレッド処理の場合1コネクションを長時間使用するため
     prop.setLogAbandoned(true)
+    prop.setRemoveAbandonedTimeout(60 * 1000)
     prop.setInitialSize(1)
+    prop.setMinIdle(1)
     prop.setMaxActive(10)
     new DataSource(prop)
   }

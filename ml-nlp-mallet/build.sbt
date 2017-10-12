@@ -1,6 +1,6 @@
 organization := "at.hazm"
 
-name := "ml-nlp-extract"
+name := "ml-nlp-mallet"
 
 version := "1.0.0"
 
@@ -8,6 +8,7 @@ scalaVersion := "2.12.3"
 
 libraryDependencies ++= Seq(
   "at.hazm" %% "ml-nlp-corpus" % "1.0.+",
+  "cc.mallet" % "mallet" % "2.0.+",
   "org.codelibs" % "elasticsearch-analysis-kuromoji-neologd" % "5.5.+",
   "org.apache.commons" % "commons-compress" % "1.+",  // bzip2
   "com.h2database" % "h2" % "1.4.+",

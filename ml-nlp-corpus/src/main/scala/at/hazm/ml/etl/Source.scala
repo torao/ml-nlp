@@ -21,7 +21,7 @@ trait Source[T] extends Pipe[T] {
     * このソースに指定されたパイプを合成し新しいソースを形成します。パイプを使用することでデータが保存されている
     * 物理ストレージとそのフォーマット変換やフィルタ処理を分離し部品化することができます。
     * {{{
-    *   FileSource("foo.txt") | LineText() | TSV()
+    *   FileSource("foo.txt") :> LineText() :> TSV()
     * }}}
     *
     * @param pipe このソースに結合するパイプ

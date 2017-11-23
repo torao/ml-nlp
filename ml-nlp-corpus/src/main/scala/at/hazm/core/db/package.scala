@@ -9,6 +9,9 @@ import org.slf4j.LoggerFactory
 package object db {
   private[db] val logger = LoggerFactory.getLogger("at.hazm.core.db.SQL")
 
+  /**
+    * Slow Query 警告対象の SQL 処理時間 (ミリ秒)
+    */
   var millisecToWarnSlowQuery:Long = 10 * 1000L
 
   private[this] sealed abstract class LogLevel(_log:(String) => Unit, _check: => Boolean) {
@@ -41,7 +44,7 @@ package object db {
     }
   }
 
-  private[db] def sqlLog(sql:String, args:Seq[Any], msec:Long, result:String, level:LogLevel):Unit = if(level.isEnabled){
+  private[db] def sqlLog(sql:String, args:Seq[Any], msec:Long, result:String, level:LogLevel):Unit = if(level.isEnabled) {
     val _args = if(args.isEmpty) "" else args.map(sqlValue).mkString(" [", ", ", "]")
     level.log(f"$sql%s;${_args} ${if(msec >= 0) f"$msec%,d" else "***"}ms => $result")
   }
@@ -55,7 +58,7 @@ package object db {
     case Some(arg) => sqlValue(arg)
     case None => "None"
     case bin:Array[_] if bin.getClass.getComponentType == classOf[Byte] =>
-      (if(bin.length <= 25) bin else bin.take(25)).collect{case b:Byte => f"$b%02X"}.mkString +
+      (if(bin.length <= 25) bin else bin.take(25)).collect { case b:Byte => f"$b%02X" }.mkString +
         (if(bin.length > 25) "..." else "") + f":${bin.length}%,d"
     case arg => arg.toString
   }
@@ -78,9 +81,9 @@ package object db {
         val stmt = con.prepareStatement(sql)
         args.zipWithIndex.foreach { case (arg, i) => stmt.setObject(i + 1, arg) }
         val rs = stmt.executeQuery()
-        new Cursor[T](converter, rs, stmt, {() =>
+        new Cursor[T](converter, rs, stmt, { () =>
           val tm = System.currentTimeMillis() - t0
-          if(tm < millisecToWarnSlowQuery){
+          if(tm < millisecToWarnSlowQuery) {
             sqlLog(sql, args, tm, "", INFO)
           } else {
             sqlLog(sql, args, tm, "(slow query)", WARN)
@@ -171,7 +174,7 @@ package object db {
   }
 
   implicit object _StringKeyType extends _KeyType[String] {
-    override val typeName:String = "text"
+    override val typeName:String = "varchar"
 
     def get(rs:ResultSet, i:Int):String = rs.getString(i)
   }
@@ -189,7 +192,7 @@ package object db {
   }
 
   trait _ValueTypeForStringColumn[T] extends _ValueType[T] {
-    val typeName:String = "text"
+    val typeName:String = "clob"
 
     def set(stmt:PreparedStatement, i:Int, value:T):Unit = stmt.setString(i, to(value))
 

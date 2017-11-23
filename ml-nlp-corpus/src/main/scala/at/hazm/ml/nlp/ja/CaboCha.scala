@@ -30,9 +30,7 @@ class CaboCha(cmd:String = "cabocha") extends AutoCloseable {
 
     // 文書内の形態素を登録して Key -> Index のマップを作製
     val morphs = ss.flatMap(_.chunks.flatMap(_.tokens.map(_.toMorph)))
-    val idMap = corpus.synchronized {
-      corpus.vocabulary.register(morphs).zip(morphs).map { case (i, m) => (m.key, i) }.toMap
-    }
+    val idMap = corpus.vocabulary.registerAll(morphs).zip(morphs).map { case (i, m) => (m.key, i) }.toMap
 
     // パラグラフの構築と登録
     val sentenceId = new AtomicInteger(0)
@@ -61,9 +59,7 @@ class CaboCha(cmd:String = "cabocha") extends AutoCloseable {
         )
       }
     )
-    corpus.synchronized {
-      corpus.paragraphs.set(id, par)
-    }
+    corpus.paragraphs.set(id, par)
     par
   }
 
@@ -79,8 +75,8 @@ class CaboCha(cmd:String = "cabocha") extends AutoCloseable {
     val doc = builder.parse(new InputSource(new StringReader(xml)))
 
     val root = doc.getDocumentElement
-    val chunks = if(root.getTagName == "sentence"){
-      root.getChildNodes.toElements.filter(_.getTagName == "chunk").map{ chunk =>
+    val chunks = if(root.getTagName == "sentence") {
+      root.getChildNodes.toElements.filter(_.getTagName == "chunk").map { chunk =>
         val toks = chunk.getChildNodes.toElements.filter(_.getTagName == "tok")
         Chunk(
           id = chunk.getAttribute("id").toInt,
@@ -139,6 +135,7 @@ object CaboCha {
 
     def toToken:at.hazm.ml.nlp.Token = {
       val Array(pos1, pos2, pos3, pos4, conjugationType, conjugationForm, baseForm, reading, pronunciation) = feature.split(",")
+
       /** 品詞 タイプ1 */
       /** 品詞 タイプ2 */
       /** 品詞 タイプ3 */
@@ -225,28 +222,10 @@ object CaboCha {
     (token.pos1 == "記号" && token.pos2 == "句点") || (token.pos1 == "助詞" && token.pos2.contains("終助詞"))
   }.getOrElse(-1)
 
-  //  def simplify(text:String):Unit = {
-  //    val cabocha = new CaboCha()
-  //    Source.fromInputStream(System.in).getLines.map(_.trim()).filter(_.nonEmpty).foreach { line =>
-  //      val sentence = cabocha.parse(line)
-  //      // どこからもかかっていない chunk を取得
-  //      val linkedChunkIds = sentence.chunks.map(_.link).toSet
-  //      sentence.chunks.filter(c => !linkedChunkIds.contains(c.id)).foreach { leaf =>
-  //        def getSequence(c:Chunk):Seq[Chunk] = {
-  //          if(c.link < 0) Seq(c) else {
-  //            c +: getSequence(sentence.chunks.find(_.id == c.link).get)
-  //          }
-  //        }
-  //
-  //        System.out.println(getSequence(leaf).map(_.tokens.map(_.term).mkString(" ")).mkString("[", "][", "]"))
-  //      }
-  //    }
-  //    cabocha.close()
-  //  }
-
-  private[ja] implicit class _NodeList(nl:NodeList){
+  private[ja] implicit class _NodeList(nl:NodeList) {
     def asScala:List[Node] = (for(i <- 0 until nl.getLength) yield nl.item(i)).toList
-    def toElements:List[Element] = asScala.collect{ case e:Element => e }
+
+    def toElements:List[Element] = asScala.collect { case e:Element => e }
   }
 
 }

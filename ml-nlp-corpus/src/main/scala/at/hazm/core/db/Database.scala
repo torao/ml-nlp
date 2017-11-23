@@ -29,12 +29,13 @@ class Database(val url:String, val username:String, val password:String) extends
     prop.setJmxEnabled(true)
     prop.setTestWhileIdle(false)
     prop.setValidationInterval(3000)
-    prop.setRemoveAbandoned(false)    // NOTE: 単一スレッド処理の場合1コネクションを長時間使用するため
+    prop.setRemoveAbandoned(false) // NOTE: 単一スレッド処理の場合1コネクションを長時間使用するため
     prop.setLogAbandoned(true)
     prop.setRemoveAbandonedTimeout(60 * 1000)
     prop.setInitialSize(1)
     prop.setMinIdle(1)
     prop.setMaxActive(10)
+    prop.setMaxIdle(10)
     new DataSource(prop)
   }
 
@@ -66,7 +67,7 @@ class Database(val url:String, val username:String, val password:String) extends
     */
   class KVS[K, V](table:String)(implicit keyType:_KeyType[K], valueType:_ValueType[V]) {
     trx { con =>
-      con.createTable(s"$table(key ${keyType.typeName} not null primary key, hash ${valueType.typeName} not null, value text not null)")
+      con.createTable(s"$table(key ${keyType.typeName} not null primary key, hash integer not null, value ${valueType.typeName} not null)")
       con.exec(s"create index if not exists ${table}_idx00 on $table(hash)")
     }
 
@@ -120,9 +121,7 @@ class Database(val url:String, val username:String, val password:String) extends
     }
 
     def foreach(f:(K, V) => Unit):Unit = trx { con =>
-      con.foreach(s"select key, value from $table order by key") { rs =>
-        f(keyType.get(rs, 1), valueType.get(rs, 2))
-      }
+      con.foreach(s"select key, value from $table order by key")(rs => f(keyType.get(rs, 1), valueType.get(rs, 2)))
     }
 
     def toCursor:Cursor[(K, V)] = {
@@ -134,13 +133,9 @@ class Database(val url:String, val username:String, val password:String) extends
 
     def size:Int = cachedSize.get()
 
-    def realSize:Int = trx {
-      _.head(s"select count(*) from $table")(_.getInt(1))
-    }
+    def realSize:Int = trx(_.head(s"select count(*) from $table")(_.getInt(1)))
 
-    def exists(key:K):Boolean = trx {
-      _.head(s"select count(*) from $table where key=?", key)(_.getInt(1)) > 0
-    }
+    def exists(key:K):Boolean = trx(_.head(s"select count(*) from $table where key=?", key)(_.getInt(1)) > 0)
 
   }
 

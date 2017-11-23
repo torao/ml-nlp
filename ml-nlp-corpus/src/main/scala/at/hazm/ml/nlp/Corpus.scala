@@ -1,14 +1,15 @@
 package at.hazm.ml.nlp
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, InputStreamReader}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, InputStreamReader}
 import java.nio.charset.StandardCharsets
-import java.sql.{PreparedStatement, ResultSet}
+import java.sql.{PreparedStatement, ResultSet, SQLException}
 import java.util.concurrent.atomic.AtomicInteger
 
 import at.hazm.core.db._
 import at.hazm.core.io.{readAllChars, using}
 import at.hazm.ml.nlp.Corpus._ParagraphType
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
+import org.h2.api.ErrorCode
 import play.api.libs.json.{JsObject, Json}
 
 /**
@@ -20,10 +21,6 @@ import play.api.libs.json.{JsObject, Json}
 class Corpus(val db:Database, val namespace:String) {
 
   def this(db:Database) = this(db, "")
-
-  def this(file:File, namespace:String) = this(new LocalDB(file), namespace)
-
-  def this(file:File) = this(new LocalDB(file), "")
 
   /**
     * このコーパスで使用するテーブル名を作成します。
@@ -45,21 +42,28 @@ class Corpus(val db:Database, val namespace:String) {
     db.trx { con =>
       // コーパステーブルの作成
       con.createTable(
-        s"""$table(id INTEGER NOT NULL PRIMARY KEY, surface VARCHAR(30) NOT NULL,
-           |pos1 VARCHAR(15) NOT NULL, pos2 VARCHAR(15) NOT NULL, VARCHAR(15) text NOT NULL, pos4 VARCHAR(15) NOT NULL,
+        s"""$table(id INTEGER NOT NULL PRIMARY KEY, hash INTEGER NOT NULL, surface VARCHAR(30) NOT NULL,
+           |pos1 VARCHAR(15) NOT NULL, pos2 VARCHAR(15) NOT NULL, pos3 VARCHAR(15) NOT NULL, pos4 VARCHAR(15) NOT NULL,
            |conj_type VARCHAR(30) NOT NULL, conj_form VARCHAR(30) NOT NULL, base VARCHAR(30) NOT NULL,
            |reading VARCHAR(60) NOT NULL, pronunciation VARCHAR(60) NOT NULL)""".stripMargin)
-      con.exec(s"CREATE UNIQUE INDEX IF NOT EXISTS ${table}_idx00 ON $table(surface, pos1, pos2, pos3, pos4)")
+      con.exec(s"CREATE UNIQUE INDEX IF NOT EXISTS ${table}_key ON $table(surface, pos1, pos2, pos3, pos4)")
+      con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_surface ON $table(surface)")
+      con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_pos1 ON $table(pos1)")
+      con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_pos2 ON $table(pos2)")
+      con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_pos3 ON $table(pos3)")
+      con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_pos4 ON $table(pos4)")
+      con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_hash ON $table(hash)")
       this.sequence.set(con.head(s"select count(*) from $table")(_.getInt(1)))
 
-      // コーパスの整合性を確認
+      // 構築時にコーパスの整合性を確認
       if(con.head(s"SELECT COUNT(*) FROM $table WHERE id < 0 OR id >= ?", sequence.get())(_.getInt(1)) > 0) {
         throw new IllegalStateException(s"vocabulary id conflict in $table (perhaps some morphs removed?)")
       }
     }
 
     /**
-      * このボキャブラリに登録されている形態素数を参照します。
+      * このボキャブラリに登録されている形態素数を参照します。返値の数値はこのインスタンスにキャッシュされている値です。インスタンスを
+      * 経由せずボキャブラリテーブルを変更した場合はこの値から差異が発生します。
       *
       * @return ボキャブラリの形態素数
       */
@@ -82,7 +86,8 @@ class Corpus(val db:Database, val namespace:String) {
       * @return ID -> 形態素 を示す Map
       */
     def getAll(ids:Seq[Int]):Map[Int, Morph] = db.trx { con =>
-      con.query(s"SELECT * FROM $table WHERE idx IN (${ids.distinct.mkString(",")})") { rs =>
+      val in = ids.map(_ => "?").mkString(",")
+      con.query(s"SELECT * FROM $table WHERE idx IN ($in)", ids:_*) { rs =>
         (rs.getInt("id"), rs2Morph(rs))
       }.toMap
     }
@@ -95,7 +100,7 @@ class Corpus(val db:Database, val namespace:String) {
       * @return 形態素の ID、未登録の場合は負の値
       */
     def indexOf(morph:Morph):Int = db.trx { con =>
-      con.headOption(s"SELECT id FROM $table WHERE term=? AND pos1=? AND pos2=? AND pos3=? AND pos4=?",
+      con.headOption(s"SELECT id FROM $table WHERE surface=? AND pos1=? AND pos2=? AND pos3=? AND pos4=?",
         morph.surface, morph.pos1, morph.pos2, morph.pos3, morph.pos4)(_.getInt(1)).getOrElse(-1)
     }
 
@@ -109,10 +114,11 @@ class Corpus(val db:Database, val namespace:String) {
       */
     def indicesOf(morphs:Seq[Morph]):Seq[Int] = db.trx { con =>
       val existing = morphs.groupBy(_.key).values.map(_.head).grouped(20).map { ms =>
-        val where = ms.map { morph =>
-          s"surface=${literal(morph.surface)} and pos1=${literal(morph.pos1)} and pos2=${literal(morph.pos2)} and pos3=${literal(morph.pos3)} and pos4=${literal(morph.pos4)}"
-        }.mkString("(", ") or (", ")")
-        con.query(s"SELECT * FROM $table WHERE $where") { rs =>
+        val in1 = ms.map(_ => "?").mkString(",")
+        val hashes = ms.map(m => Database.makeHash(m.key)).toSeq
+        val in2 = ms.map(_ => "(?,?,?,?,?)").mkString(",")
+        val params = ms.flatMap(morph => Seq(morph.surface, morph.pos1, morph.pos2, morph.pos3, morph.pos4)).toSeq
+        con.query(s"SELECT * FROM $table WHERE hash IN ($in1) AND (surface,pos1,pos2,pos3,pos4) IN ($in2)", hashes ++ params:_*) { rs =>
           val id = rs.getInt("id")
           val morph = rs2Morph(rs)
           (morph.key, id)
@@ -144,7 +150,7 @@ class Corpus(val db:Database, val namespace:String) {
       * @param morph 登録する形態素
       * @return 形態素の ID
       */
-    def register(morph:Morph):Int = register(Seq(morph)).head
+    def register(morph:Morph):Int = registerAll(Seq(morph)).head
 
     /**
       * 指定された形態素をこのボキャブラリに登録しその ID を返します。返値は形態素 `morphs` の順序で並べられたそれぞれの ID です。
@@ -153,7 +159,7 @@ class Corpus(val db:Database, val namespace:String) {
       * @param morphs 登録する形態素
       * @return 形態素の ID
       */
-    def register(morphs:Seq[Morph]):Seq[Int] = {
+    def registerAll(morphs:Seq[Morph]):Seq[Int] = synchronized {
       val unique = morphs.groupBy(_.key).mapValues(_.head)
       val uniqueTokens = unique.toSeq
 
@@ -164,12 +170,19 @@ class Corpus(val db:Database, val namespace:String) {
       // 新しく登録する形態素の SQL を構築
       val newbies = indices.filter(_._2 < 0).map(_._3).map { m =>
         val id = sequence.getAndIncrement()
-        (m.key, id, s"($id,${literal(m.surface)},${literal(m.pos1)},${literal(m.pos2)},${literal(m.pos3)},${literal(m.pos4)},${literal(m.conjugationType)},${literal(m.conjugationForm)},${literal(m.baseForm)},${literal(m.reading)},${literal(m.pronunciation)})")
+        (m.key, id, m)
       }
 
       if(newbies.nonEmpty) {
         db.trx { con =>
-          con.exec(s"INSERT INTO $table(id,surface,pos1,pos2,pos3,pos4,conj_type,conj_form,base,reading,pronunciation) VALUES${newbies.map(_._3).mkString(",")}")
+          newbies.grouped(50).foreach { ms =>
+            val values = ms.map(_ => "(?,?,?,?,?,?,?,?,?,?,?,?)").mkString(",")
+            val params = ms.flatMap { case (_, id, m) =>
+              val hash = Database.makeHash(m.key)
+              Seq(id, hash, m.surface, m.pos1, m.pos2, m.pos3, m.pos4, m.conjugationType, m.conjugationForm, m.baseForm, m.reading, m.pronunciation)
+            }
+            con.exec(s"INSERT INTO $table(id,hash,surface,pos1,pos2,pos3,pos4,conj_type,conj_form,base,reading,pronunciation) VALUES$values", params:_*)
+          }
         }
       }
 

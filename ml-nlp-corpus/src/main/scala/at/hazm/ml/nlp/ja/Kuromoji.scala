@@ -25,7 +25,7 @@ object Kuromoji {
     */
   def tokenize(text:String):Seq[Morph] = {
 
-    val tokenizer = new JapaneseTokenizer(null, true, JapaneseTokenizer.Mode.NORMAL)
+    val tokenizer = new JapaneseTokenizer(null, false, JapaneseTokenizer.Mode.NORMAL)
     val term = tokenizer.getAttribute(classOf[CharTermAttribute])
     val pos = tokenizer.getAttribute(classOf[PartOfSpeechAttribute])
     val baseForm = tokenizer.getAttribute(classOf[BaseFormAttribute])

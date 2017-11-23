@@ -1,7 +1,10 @@
 package at.hazm.core.util
 
-import java.util.concurrent.atomic.AtomicLong
+import java.lang.management.ManagementFactory
+import java.text.DateFormat
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.{Timer, TimerTask}
+import javax.management.ObjectName
 
 import at.hazm.core.util.Diagnostics.Performance
 import org.slf4j.LoggerFactory
@@ -72,11 +75,20 @@ object Diagnostics {
     private[this] val task = new TimerTask {
       override def run():Unit = print()
     }
+    private[this] val _stopped = new AtomicBoolean(false)
 
     private[this] val history = mutable.Buffer[(Long, Long)]()
     history.append((t0, init))
 
     timer.scheduleAtFixedRate(task, interval, interval)
+
+    def apply(f:(Progress) => Unit):Unit = try {
+      f(this)
+    } catch {
+      case ex:Break => ()
+    } finally {
+      stop()
+    }
 
     /**
       * 現在の進捗値を参照します。
@@ -116,9 +128,19 @@ object Diagnostics {
       } else if(current == init + 1) {
         print()
       }
+      if(_stopped.get()) {
+        throw new Break()
+      }
     }
 
-    def stop():Unit = task.cancel()
+    def stopped:Boolean = _stopped.get
+
+    private[this] def stop():Unit = {
+      _stopped.set(true)
+      val server = ManagementFactory.getPlatformMBeanServer
+      server.unregisterMBean(mxBeanName)
+      task.cancel()
+    }
 
     private[this] def print():Unit = {
       val tm = diag.report.tm
@@ -128,23 +150,15 @@ object Diagnostics {
         s"所要時間 ${intervalString(tm - t0)}"
       } else {
         // 履歴に進捗を追加
-        history.append((tm, current))
+        history.append((tm, current + init))
         while(history.size > (60 * 60 * 1000L) / interval) {
           history.remove(0)
         }
 
-        // 最小二乗法で傾き a と切片 b を計算
-        val n = history.size
-        val Σxy = history.map(t => t._1.toDouble * t._2).sum
-        val Σx = history.map(t => t._1.toDouble).sum
-        val Σy = history.map(t => t._2.toDouble).sum
-        val Σx2 = history.map(t => t._1.toDouble * t._1).sum
-        val a = (n * Σxy - Σx * Σy) / (n * Σx2 - Σx * Σx)
-        val b = (Σx2 * Σy - Σxy * Σx) / (n * Σx2 - Σx * Σx)
-        if(a.isInfinity || b.isInfinite) {
+        val t = estimateEndTime()
+        if(t < 0) {
           s"終了予想時間計測中"
         } else {
-          val t = ((max - b) / a).toLong // 終了予想時刻
           s"残り ${intervalString(t - tm)}"
         }
       }
@@ -153,6 +167,43 @@ object Diagnostics {
       if(diag.performance.nonEmpty) {
         logger.info(diag.performance.map { case (id, p) => f"$id:avr=${p.totalTime / p.callCount}%,dms,min=${p.min}%,dms,max=${p.max}%,dms/${p.callCount}%,dcall" }.mkString(" "))
       }
+    }
+
+    private[this] def estimateEndTime():Long = {
+      // 最小二乗法で傾き a と切片 b を計算
+      val n = history.size
+      val Σxy = history.map(t => t._1.toDouble * t._2).sum
+      val Σx = history.map(t => t._1.toDouble).sum
+      val Σy = history.map(t => t._2.toDouble).sum
+      val Σx2 = history.map(t => t._1.toDouble * t._1).sum
+      val a = (n * Σxy - Σx * Σy) / (n * Σx2 - Σx * Σx)
+      val b = (Σx2 * Σy - Σxy * Σx) / (n * Σx2 - Σx * Σx)
+      if(a.isInfinity || b.isInfinite) -1 else ((max - b) / a).toLong
+    }
+
+    private[this] class Break extends Exception
+
+    private[this] class MXBean extends ProgressMXBean {
+      override def getStart:String = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(t0)
+
+      override def getEnd:String = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(estimateEndTime())
+
+      override def getCurrent:Long = current
+
+      override def getFinished:Long = init + current
+
+      override def getTotal:Long = max
+
+      override def shutdown():Unit = if(_stopped.compareAndSet(false, true)) {
+        logger.info("shutting down")
+      }
+    }
+
+    private[this] val mxBeanName = new ObjectName(s"at.hazm.diag:name=$prefix")
+    locally {
+      val server = ManagementFactory.getPlatformMBeanServer
+      val mbean = new MXBean()
+      server.registerMBean(mbean, mxBeanName)
     }
 
   }

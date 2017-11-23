@@ -19,7 +19,7 @@ package object tools {
   def countLines(file:File, cacheDB:LocalDB = null):Int = Option(cacheDB).flatMap { db =>
     // 行数が保存されていてファイルに変更がなければそれを返す
     db.trx { con =>
-      con.createTable(s"file_info(name text not null primary key, length bigint not null, last_modified timestamp not null, lines integer not null)")
+      con.createTable(s"file_info(name varchar not null primary key, length bigint not null, last_modified timestamp not null, lines integer not null)")
       con.headOption("select lines from file_info where name=? and length=? and last_modified=?",
         file.getCanonicalPath, file.length(), new Timestamp(file.lastModified()))(_.getInt(1))
     }

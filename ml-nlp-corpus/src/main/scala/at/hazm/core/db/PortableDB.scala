@@ -7,4 +7,4 @@ import java.io.File
   *
   * @param file データベースファイル
   */
-class PortableDB(file:File) extends Database(s"jdbc:sqlite:$file", "", "")
+class PortableDB(file:File) extends Database(s"jdbc:sqlite:$file", "", "", classOf[org.sqlite.JDBC].getName)

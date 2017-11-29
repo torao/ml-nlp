@@ -109,7 +109,6 @@ object Diagnostics {
       * @param message 状況メッセージ
       */
     def report(current:Long, message:String):Unit = {
-      this._current.set(current)
       _report(current, message)
     }
 
@@ -118,6 +117,9 @@ object Diagnostics {
     def report(current:Long):Unit = report(current, "")
 
     private[this] def _report(current:Long, message:String = ""):Unit = {
+      if(current < this._current.get()){
+        logger.warn(s"current value less than progressing state: $current < ${this._current}")
+      }
       this._current.set(current)
       diag.report.current = current
       diag.report.message = message
@@ -150,7 +152,7 @@ object Diagnostics {
         s"所要時間 ${intervalString(tm - t0)}"
       } else {
         // 履歴に進捗を追加
-        history.append((tm, current + init))
+        history.append((tm, current))
         while(history.size > (60 * 60 * 1000L) / interval) {
           history.remove(0)
         }
@@ -188,11 +190,13 @@ object Diagnostics {
 
       override def getEnd:String = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(estimateEndTime())
 
-      override def getCurrent:Long = current
+      override def getCurrent:Long = current - init
 
-      override def getFinished:Long = init + current
+      override def getFinished:Long = current
 
       override def getTotal:Long = max
+
+      override def getMessage:String = diag.report.message
 
       override def shutdown():Unit = if(_stopped.compareAndSet(false, true)) {
         logger.info("shutting down")

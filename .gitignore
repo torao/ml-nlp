@@ -4,11 +4,12 @@
 *.zip
 *.bz2
 *.db
+*.bak
 *.iml
 
 # sbt specific
 .cache
-.history
+.bash_history
 .lib/
 dist/*
 target/

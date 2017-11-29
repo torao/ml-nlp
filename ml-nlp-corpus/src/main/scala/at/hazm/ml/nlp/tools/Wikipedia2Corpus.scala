@@ -40,6 +40,7 @@ class Wikipedia2Corpus(file:File) {
     using(new ParallelCaboCha(threads)) { cabocha =>
       val docCount = countLines(src, db)
       val current = new LongAdder()
+      current.add(corpus.paragraphs.size)
       new Progress(src.getName, corpus.paragraphs.size, docCount).apply { prog =>
         (new FileSource(src, gzip = true) :> new SplitLine()).map { line:String =>
           val Array(id, title, content) = line.split("\t")
@@ -47,16 +48,14 @@ class Wikipedia2Corpus(file:File) {
         }.filter { case (id, title, _) =>
           !title.endsWith("一覧") && !title.contains("曖昧さ回避") && !corpus.paragraphs.exists(id)
         }.foreach { case (id, title, content) =>
-          if(!prog.stopped) {
-            prog.report(current.longValue(), f"$title (${content.length}%,d文字)")
-            cabocha.parse(id, Text.normalize(content), corpus).onComplete {
-              case Success(para) =>
-                // corpus.paragraphs.set(id, para)    // cabocha.parse() 内で行っている
-                current.increment()
-                prog.report(current.longValue(), title)
-              case Failure(ex) =>
-                logger.error(s"in document $id", ex)
-            }
+          prog.report(current.longValue(), f"$title (${content.length}%,d文字)")
+          cabocha.parse(id, Text.normalize(content), corpus).onComplete {
+            case Success(para) =>
+              // corpus.paragraphs.set(id, para)    // cabocha.parse() 内で行っている
+              current.increment()
+              // prog.report(current.longValue(), title)
+            case Failure(ex) =>
+              logger.error(s"in document $id", ex)
           }
         }
       }

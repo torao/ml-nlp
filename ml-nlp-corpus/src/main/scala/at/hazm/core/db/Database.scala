@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory
   * @param username ユーザ名
   * @param password パスワード
   */
-class Database(val url:String, val username:String, val password:String) extends AutoCloseable {
+class Database(val url:String, val username:String, val password:String, driver:String) extends AutoCloseable {
 
   /**
     * データソース。
@@ -26,6 +26,7 @@ class Database(val url:String, val username:String, val password:String) extends
     prop.setUrl(url)
     prop.setUsername(username)
     prop.setPassword(password)
+    prop.setDriverClassName(driver)
     prop.setJmxEnabled(true)
     prop.setTestWhileIdle(false)
     prop.setValidationInterval(3000)

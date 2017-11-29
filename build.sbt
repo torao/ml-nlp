@@ -4,7 +4,7 @@ name := "nlp-ml"
 
 version := "1.0.0"
 
-scalaVersion := "2.12.3"
+scalaVersion := "2.12.4"
 
 resolvers ++= Seq(
   "CodeLibs Repository" at "http://maven.codelibs.org/"

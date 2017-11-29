@@ -41,10 +41,12 @@ object Word2Vec {
     new Word2Vec(model)
   }
 
+  /*
   def load(fs:BlobStore#Entry):Word2Vec = {
     val model = fs.load { file =>
       WordVectorSerializer.readWord2VecModel(file)
     }
     new Word2Vec(model)
   }
+  */
 }

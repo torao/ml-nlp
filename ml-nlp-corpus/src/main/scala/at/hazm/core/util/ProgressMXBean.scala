@@ -14,6 +14,8 @@ trait ProgressMXBean {
   def getFinished:Long
   /** 全体の数 */
   def getTotal:Long
+  /** 現在のメッセージ */
+  def getMessage:String
 
   /** 処理の中断 */
   def shutdown():Unit

@@ -2,14 +2,13 @@ package at.hazm.ml.nlp
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, InputStreamReader}
 import java.nio.charset.StandardCharsets
-import java.sql.{PreparedStatement, ResultSet, SQLException}
+import java.sql.{PreparedStatement, ResultSet}
 import java.util.concurrent.atomic.AtomicInteger
 
 import at.hazm.core.db._
 import at.hazm.core.io.{readAllChars, using}
 import at.hazm.ml.nlp.Corpus._ParagraphType
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
-import org.h2.api.ErrorCode
 import play.api.libs.json.{JsObject, Json}
 
 /**
@@ -76,7 +75,7 @@ class Corpus(val db:Database, val namespace:String) {
       * @return 形態素
       */
     def get(id:Int):Option[Morph] = db.trx { con =>
-      con.headOption(s"SELECT * FROM $table WHERE idx = ?", id)(rs2Morph)
+      con.headOption(s"SELECT * FROM $table WHERE id = ?", id)(rs2Morph)
     }
 
     /**
@@ -87,7 +86,7 @@ class Corpus(val db:Database, val namespace:String) {
       */
     def getAll(ids:Seq[Int]):Map[Int, Morph] = db.trx { con =>
       val in = ids.map(_ => "?").mkString(",")
-      con.query(s"SELECT * FROM $table WHERE idx IN ($in)", ids:_*) { rs =>
+      con.query(s"SELECT * FROM $table WHERE id IN ($in)", ids:_*) { rs =>
         (rs.getInt("id"), rs2Morph(rs))
       }.toMap
     }
@@ -198,7 +197,7 @@ class Corpus(val db:Database, val namespace:String) {
       * @return 単語のインデックス、または負の値
       */
     def indexOf(term:String):Int = db.trx { con =>
-      con.headOption(s"SELECT idx FROM $table WHERE term=?", term)(_.getInt(1)).getOrElse(-1)
+      con.headOption(s"SELECT id FROM $table WHERE term=?", term)(_.getInt(1)).getOrElse(-1)
     }
 
     /**
@@ -208,7 +207,7 @@ class Corpus(val db:Database, val namespace:String) {
       * @return 取得した (ID,単語) のリスト
       */
     def prefixed(prefix:String):List[(Int, String)] = db.trx { con =>
-      con.query(s"SELECT idx, term FROM $table WHERE term LIKE '%' || ?", prefix) { rs => (rs.getInt(1), rs.getString(2)) }.toList
+      con.query(s"SELECT id, term FROM $table WHERE term LIKE '%' || ?", prefix) { rs => (rs.getInt(1), rs.getString(2)) }.toList
     }
   }
 

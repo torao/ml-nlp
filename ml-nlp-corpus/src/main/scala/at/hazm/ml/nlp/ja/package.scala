@@ -11,7 +11,15 @@ package object ja {
     * @param text 正規化する文字列
     * @return 正規化した文字列
     */
-  def normalize(text:String):String = Normalizer.normalize(text, Normalizer.Form.NFKC).toUpperCase
+  def normalize(text:String):String = Text.normalize(text)
+
+  /**
+    * 指定された文字列を文に分割します。日本語の文は句点を区切りと認識します。
+    *
+    * @param text 文に分解する文字列
+    * @return 文に分解された文字列
+    */
+  def splitSentence(text:String):Seq[String] = text.split("。").map(_ + "。")
 
   /**
     * 指定された形態素に含まれるの否定形を直前の動詞または形容詞と結合します (例: [走ら][ない] → [走らない])。

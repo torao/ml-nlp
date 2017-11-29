@@ -2,8 +2,7 @@ package at.hazm.ml.nlp.ja
 
 import java.io.StringReader
 
-import at.hazm.ml.etl.Transform
-import at.hazm.ml.nlp.{Morph, Token}
+import at.hazm.ml.nlp.Morph
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import org.codelibs.neologd.ipadic.lucene.analysis.ja.JapaneseTokenizer
 import org.codelibs.neologd.ipadic.lucene.analysis.ja.tokenattributes.{BaseFormAttribute, InflectionAttribute, PartOfSpeechAttribute, ReadingAttribute}

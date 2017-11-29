@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory
   * @param username ユーザ名
   * @param password パスワード
   */
-class Database(val url:String, val username:String, val password:String, driver:String) extends AutoCloseable {
+class Database(val url:String, val username:String, val password:String, driver:String, readOnly:Boolean = false) extends AutoCloseable {
 
   /**
     * データソース。
@@ -37,6 +37,8 @@ class Database(val url:String, val username:String, val password:String, driver:
     prop.setMinIdle(1)
     prop.setMaxActive(10)
     prop.setMaxIdle(10)
+    prop.setDefaultReadOnly(readOnly)
+    prop.setDefaultAutoCommit(true)
     new DataSource(prop)
   }
 
@@ -128,6 +130,15 @@ class Database(val url:String, val username:String, val password:String, driver:
     def toCursor:Cursor[(K, V)] = {
       val con = newConnection
       val stmt = con.prepareStatement(s"select key, value from $table order by key")
+      val rs = stmt.executeQuery()
+      new Cursor({ rs => (keyType.get(rs, 1), valueType.get(rs, 2)) }, rs, stmt, con)
+    }
+
+    def toCursor(limit:Int, offset:Int = 0):Cursor[(K, V)] = {
+      val con = newConnection
+      val stmt = con.prepareStatement(s"select key, value from $table order by key limit ? offset ?")
+      stmt.setInt(1, limit)
+      stmt.setInt(2, offset)
       val rs = stmt.executeQuery()
       new Cursor({ rs => (keyType.get(rs, 1), valueType.get(rs, 2)) }, rs, stmt, con)
     }

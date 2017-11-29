@@ -53,7 +53,7 @@ class Wikipedia2Corpus(file:File) {
             case Success(para) =>
               // corpus.paragraphs.set(id, para)    // cabocha.parse() 内で行っている
               current.increment()
-              // prog.report(current.longValue(), title)
+            // prog.report(current.longValue(), title)
             case Failure(ex) =>
               logger.error(s"in document $id", ex)
           }

@@ -9,4 +9,4 @@ import org.h2.Driver
   *
   * @param file データベースファイル
   */
-class LocalDB(file:File) extends Database(s"jdbc:h2:${file.getAbsolutePath}", "", "", classOf[Driver].getName)
+class LocalDB(file:File, readOnly:Boolean = false) extends Database(s"jdbc:h2:${file.getAbsolutePath}", "", "", classOf[Driver].getName, readOnly)

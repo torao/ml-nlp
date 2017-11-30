@@ -105,7 +105,9 @@ object Paragraph {
       * @return 文字列としての文
       */
     def makePlainText(corpus:Corpus):String = {
-      corpus.vocabulary.getAll(clauses.flatMap(_.morphs.map(_.morphId))).map(_._2.surface).mkString
+      val morphIds = clauses.flatMap(_.morphs.map(_.morphId))
+      val morphs = corpus.vocabulary.getAll(morphIds)
+      morphIds.map(id => morphs(id).surface).mkString
     }
 
     def toJSON:JsObject = Json.obj(

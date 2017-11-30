@@ -2,7 +2,7 @@ organization := "at.hazm"
 
 name := "ml-nlp-corpus"
 
-version := "1.0.0"
+version := "1.0.0." + new java.text.SimpleDateFormat("yyyyMMddHHmm").format(new java.util.Date())
 
 scalaVersion := "2.12.4"
 
@@ -12,7 +12,6 @@ libraryDependencies ++= Seq(
   "org.apache.tomcat" % "tomcat-jdbc" % "8.5.+",
   "com.h2database" % "h2" % "1.4.+",
   "org.xerial" % "sqlite-jdbc" % "3.16.+",
-  "org.xerial.snappy" % "snappy-java" % "1.1.2.+",
   "org.apache.commons" % "commons-compress" % "1.8",
   "com.typesafe.play" % "play-json_2.12" % "2.6.0-M7",
   "org.slf4j" % "slf4j-log4j12" % "1.7.25",

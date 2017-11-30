@@ -63,6 +63,7 @@ package object tools {
     // 行数を保存
     Option(cacheDB).foreach { db =>
       db.trx { con =>
+        con.exec("delete from file_info where name=?", file.getCanonicalPath)
         con.exec("insert into file_info(name, length, last_modified, lines) values(?, ?, ?, ?)",
           file.getCanonicalPath, file.length(), new Timestamp(file.lastModified()), lines
         )

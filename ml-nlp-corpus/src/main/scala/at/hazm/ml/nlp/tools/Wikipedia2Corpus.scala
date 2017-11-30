@@ -42,7 +42,7 @@ class Wikipedia2Corpus(file:File) {
       val current = new LongAdder()
       current.add(corpus.paragraphs.size)
       new Progress(src.getName, corpus.paragraphs.size, docCount).apply { prog =>
-        (new FileSource(src, gzip = true) :> new SplitLine()).map { line:String =>
+        (new FileSource(src, gzip = true) :> new SplitLine()).drop(1).map { line:String =>
           val Array(id, title, content) = line.split("\t")
           (id.toInt, title, content)
         }.filter { case (id, title, _) =>

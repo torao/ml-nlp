@@ -6,6 +6,8 @@ version := "1.0.0." + new java.text.SimpleDateFormat("yyyyMMddHHmm").format(new 
 
 scalaVersion := "2.12.4"
 
+resolvers += "CodeLibs Repository" at "http://maven.codelibs.org/"
+
 libraryDependencies ++= Seq(
   "org.scala-lang.modules" %% "scala-xml" % "1.0.6",
   "org.codelibs" % "elasticsearch-analysis-kuromoji-neologd" % "5.5.+",

@@ -60,9 +60,14 @@ class ResourcePool[T](size:Int, factory:Factory[T]) extends AutoCloseable {
     val r = acquire()
     Future {
       try {
-        f(r)
-      } finally {
+        val result = f(r)
         recycle(r)
+        result
+      } catch {
+        case ex:Throwable =>
+          factory.dispose(r)
+          if(! closed.get()) pool.put(factory.acquire())
+          throw ex
       }
     }
   }

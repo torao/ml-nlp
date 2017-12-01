@@ -56,8 +56,8 @@ object Paragraph {
   /**
     * 文節クラス。
     *
-    * @param id     文節 ID
-    * @param link   係り先の文節 ID
+    * @param id     文節 ID (文の中で一意)
+    * @param link   係り先の文節 ID (係り受け先がない場合は負の値)
     * @param rel    係り受け関係
     * @param score  係り受けの強さ (大きい方がかかりやすい)
     * @param head   主辞の形態素 ID

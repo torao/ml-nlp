@@ -22,38 +22,37 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="SBT: com.fasterxml.jackson.core:jackson-annotations:2.8.5:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.xerial.snappy:snappy-java:1.1.2.6:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.scala-lang.modules:scala-xml_2.12:1.0.6:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.scala-lang:scala-reflect:2.12.4:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.scala-lang:scala-library:2.12.4:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.codelibs:lucene-analyzers-kuromoji-ipadic-neologd:6.6.0-20171002:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.codelibs:elasticsearch-analysis-kuromoji-neologd:5.5.1:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.codelibs:analyzers-ja:6.6.0.0:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.apache.tomcat:tomcat-juli:8.5.23:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.apache.tomcat:tomcat-jdbc:8.5.23:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.apache.lucene:lucene-core:6.6.0:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.apache.lucene:lucene-analyzers-kuromoji:6.6.0:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.apache.lucene:lucene-analyzers-common:6.6.0:jar" level="project" />
-    <orderEntry type="library" name="SBT: com.h2database:h2:1.4.196:jar" level="project" />
-    <orderEntry type="library" name="SBT: com.fasterxml.jackson.core:jackson-core:2.8.5:jar" level="project" />
-    <orderEntry type="library" name="SBT: com.fasterxml.jackson.core:jackson-databind:2.8.5:jar" level="project" />
-    <orderEntry type="library" name="SBT: com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.8.5:jar" level="project" />
-    <orderEntry type="library" name="SBT: com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.8.5:jar" level="project" />
-    <orderEntry type="library" name="SBT: com.typesafe.play:play-functional_2.12:2.6.0-M7:jar" level="project" />
-    <orderEntry type="library" name="SBT: com.typesafe.play:play-json_2.12:2.6.0-M7:jar" level="project" />
-    <orderEntry type="library" name="SBT: joda-time:joda-time:2.9.6:jar" level="project" />
-    <orderEntry type="library" name="SBT: log4j:log4j:1.2.17:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.apache.commons:commons-compress:1.8:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.scala-lang.modules:scala-parser-combinators_2.12:1.0.4:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.scalaz:scalaz-core_2.12:7.2.7:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.scalaz:scalaz-effect_2.12:7.2.7:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.slf4j:slf4j-api:1.7.25:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.slf4j:slf4j-log4j12:1.7.25:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.specs2:specs2-common_2.12:3.8.9:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.specs2:specs2-core_2.12:3.8.9:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.specs2:specs2-matcher_2.12:3.8.9:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.tukaani:xz:1.5:jar" level="project" />
-    <orderEntry type="library" name="SBT: org.typelevel:macro-compat_2.12:1.1.1:jar" level="project" />
     <orderEntry type="library" name="SBT: org.xerial:sqlite-jdbc:3.16.1:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.typelevel:macro-compat_2.12:1.1.1:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.tukaani:xz:1.5:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.specs2:specs2-matcher_2.12:3.8.9:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.specs2:specs2-core_2.12:3.8.9:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.specs2:specs2-common_2.12:3.8.9:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.slf4j:slf4j-log4j12:1.7.25:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.slf4j:slf4j-api:1.7.25:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.scalaz:scalaz-effect_2.12:7.2.7:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.scalaz:scalaz-core_2.12:7.2.7:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.scala-lang.modules:scala-parser-combinators_2.12:1.0.4:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.apache.commons:commons-compress:1.8:jar" level="project" />
+    <orderEntry type="library" name="SBT: log4j:log4j:1.2.17:jar" level="project" />
+    <orderEntry type="library" name="SBT: joda-time:joda-time:2.9.6:jar" level="project" />
+    <orderEntry type="library" name="SBT: com.typesafe.play:play-json_2.12:2.6.0-M7:jar" level="project" />
+    <orderEntry type="library" name="SBT: com.typesafe.play:play-functional_2.12:2.6.0-M7:jar" level="project" />
+    <orderEntry type="library" name="SBT: com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.8.5:jar" level="project" />
+    <orderEntry type="library" name="SBT: com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.8.5:jar" level="project" />
+    <orderEntry type="library" name="SBT: com.fasterxml.jackson.core:jackson-databind:2.8.5:jar" level="project" />
+    <orderEntry type="library" name="SBT: com.fasterxml.jackson.core:jackson-core:2.8.5:jar" level="project" />
+    <orderEntry type="library" name="SBT: com.h2database:h2:1.4.196:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.apache.lucene:lucene-analyzers-common:6.6.0:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.apache.lucene:lucene-analyzers-kuromoji:6.6.0:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.apache.lucene:lucene-core:6.6.0:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.apache.tomcat:tomcat-jdbc:8.5.23:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.apache.tomcat:tomcat-juli:8.5.23:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.codelibs:analyzers-ja:6.6.0.0:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.codelibs:elasticsearch-analysis-kuromoji-neologd:5.5.1:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.codelibs:lucene-analyzers-kuromoji-ipadic-neologd:6.6.0-20171002:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.scala-lang:scala-library:2.12.4:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.scala-lang:scala-reflect:2.12.4:jar" level="project" />
+    <orderEntry type="library" name="SBT: org.scala-lang.modules:scala-xml_2.12:1.0.6:jar" level="project" />
   </component>
 </module>

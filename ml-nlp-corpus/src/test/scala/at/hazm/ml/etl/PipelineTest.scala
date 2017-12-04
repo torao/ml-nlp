@@ -18,14 +18,14 @@ URL ソース: $e4
   def e0:Result = {
     val sample = "ABC\nDEFG\rHI\r\nJKLMN\r\n"
     val expected = List("ABC", "DEFG", "HI", "JKLMN")
-    test(new StringSource(sample) :> new SplitLine() :> { line:String => line }, expected)
+    test(new StringSource(sample) :> new TextLine() :> { line:String => line }, expected)
   }
 
   def e1:Result = {
     val sample1 = "ABC\nDEFG\r\n"
     val sample2 = "HI\r\nJKLMN\r\n"
     val expected = List("ABC", "DEFG", "HI", "JKLMN")
-    test(Source.sequence(new StringSource(sample1), new StringSource(sample2)) :> new SplitLine(), expected)
+    test(Source.sequence(new StringSource(sample1), new StringSource(sample2)) :> new TextLine(), expected)
   }
 
   def e2:Result = {
@@ -39,7 +39,7 @@ URL ソース: $e4
     val file = File.createTempFile("pipeline-test", ".tmp")
     file.deleteOnExit()
     at.hazm.core.io.writeText(file)(_.write(sample))
-    val result = test(new FileSource(file) :> new SplitLine(), expected)
+    val result = test(new FileSource(file) :> new TextLine(), expected)
     result and (file.delete() must beTrue)
   }
 
@@ -49,7 +49,7 @@ URL ソース: $e4
     val file = File.createTempFile("pipeline-test", ".tmp")
     file.deleteOnExit()
     at.hazm.core.io.writeText(file)(_.write(sample))
-    val result = test(new URLSource(file.toURI.toURL) :> new SplitLine(), expected)
+    val result = test(new URLSource(file.toURI.toURL) :> new TextLine(), expected)
     result and (file.delete() must beTrue)
   }
 

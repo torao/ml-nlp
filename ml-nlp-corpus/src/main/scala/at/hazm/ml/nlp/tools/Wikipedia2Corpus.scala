@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.LongAdder
 import at.hazm.core.db.LocalDB
 import at.hazm.core.io.using
 import at.hazm.core.util.Diagnostics.Progress
-import at.hazm.ml.etl.{FileSource, SplitLine}
+import at.hazm.ml.etl.{FileSource, TextLine}
 import at.hazm.ml.nlp.ja.ParallelCaboCha
 import at.hazm.ml.nlp.{Corpus, Text}
 import org.slf4j.LoggerFactory
@@ -42,7 +42,7 @@ class Wikipedia2Corpus(file:File) {
       val current = new LongAdder()
       current.add(corpus.paragraphs.size)
       (new Progress(src.getName, corpus.paragraphs.size, docCount)) { prog =>
-        (new FileSource(src, gzip = true) :> new SplitLine()).drop(1).map { line:String =>
+        (new FileSource(src, gzip = true) :> new TextLine()).drop(1).map { line:String =>
           val Array(id, title, content) = line.split("\t")
           (id.toInt, title, content)
         }.filter { case (id, title, _) =>

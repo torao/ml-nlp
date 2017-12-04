@@ -7,8 +7,11 @@ import scala.collection.mutable
 
 /**
   * 任意の文字列列挙を行で分割する Transform です。
+  *
+  * @param skipLines ヘッダ行が存在する場合、読み捨てる行数
   */
-class SplitLine extends Transform[String, String] {
+class TextLine(skipLines:Int = 0) extends Transform[String, String] {
+  private[this] var init = true
 
   /**
     * 読み込み済みの文字列バッファ。前回の行分割評価での残った文字列が保存される。
@@ -23,9 +26,22 @@ class SplitLine extends Transform[String, String] {
   override def reset():Unit = {
     lines.clear()
     remains.setLength(0)
+    init = true
   }
 
-  override def hasNext:Boolean = lines.nonEmpty || remains.nonEmpty || source.hasNext
+  override def hasNext:Boolean = {
+    @tailrec
+    def _skipReading(lines:Int):Unit = if(lines > 0 && hasNext) {
+      next()
+      _skipReading(lines - 1)
+    }
+
+    if(init) {
+      init = false
+      _skipReading(skipLines)
+    }
+    lines.nonEmpty || remains.nonEmpty || source.hasNext
+  }
 
   override def next():String = {
     if(lines.isEmpty) {

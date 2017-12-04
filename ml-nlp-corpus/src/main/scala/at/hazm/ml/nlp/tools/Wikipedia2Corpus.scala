@@ -62,8 +62,7 @@ class Wikipedia2Corpus(file:File) {
     }
     logger.info(f"ドキュメント数: ${corpus.paragraphs.realSize}%,d 文書")
     logger.info(f"形態素数: ${corpus.vocabulary.size}%,d 単語")
-
-    // TODO 最短文や抽象化文の作成
+    logger.info("コーパスの作成が完了しました。引き続き InitCorpus を実行してください。")
     executor.shutdown()
     db.close()
   }

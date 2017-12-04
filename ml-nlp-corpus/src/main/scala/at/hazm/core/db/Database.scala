@@ -1,12 +1,14 @@
 package at.hazm.core.db
 
+import java.io.PrintWriter
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.sql.Connection
+import java.sql.{Connection, SQLException}
 import java.util.concurrent.atomic.AtomicInteger
 
 import at.hazm.core.io.using
 import org.apache.tomcat.jdbc.pool.{DataSource, PoolProperties}
+import org.h2.api.ErrorCode
 import org.slf4j.LoggerFactory
 
 /**
@@ -70,8 +72,8 @@ class Database(val url:String, val username:String, val password:String, driver:
     */
   class KVS[K, V](table:String)(implicit keyType:_KeyType[K], valueType:_ValueType[V]) {
     trx { con =>
-      con.createTable(s"$table(key ${keyType.typeName} not null primary key, hash integer not null, value ${valueType.typeName} not null)")
-      con.exec(s"create index if not exists ${table}_idx00 on $table(hash)")
+      con.createTable(s"$table(key ${keyType.typeName} NOT NULL PRIMARY KEY, hash INTEGER NOT NULL, value ${valueType.typeName} NOT NULL)")
+      con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_idx00 ON $table(hash)")
     }
 
     private[this] val cachedSize = new AtomicInteger(realSize)
@@ -81,62 +83,55 @@ class Database(val url:String, val username:String, val password:String, driver:
     }
 
     def get(key:K):Option[V] = trx {
-      _.headOption(s"select value from $table where key=?", key)(rs => valueType.get(rs, 1))
+      _.headOption(s"SELECT value FROM $table WHERE key=?", key)(rs => valueType.get(rs, 1))
     }
 
     def getAll(key:K*):Map[K, V] = trx {
-      _.query(s"select key, value from $table where key in (${key.mkString(",")})") { rs =>
+      _.query(s"SELECT key, value FROM $table WHERE key IN (${key.mkString(",")})") { rs =>
         keyType.get(rs, 1) -> valueType.get(rs, 2)
       }.toMap
     }
 
     def getIds(value:V):Seq[K] = trx { con =>
       val hash = valueType.hash(value)
-      con.query(s"select key, value from $table where hash=?", hash) { rs =>
+      con.query(s"SELECT key, value FROM $table WHERE hash=?", hash) { rs =>
         (keyType.get(rs, 1), valueType.get(rs, 2))
       }.filter(x => valueType.equals(x._2, value)).map(_._1).toList
     }
 
     def randomSelect(r: => Double):(K, V) = trx { con =>
-      val count = con.head(s"select count(*) from $table")(_.getInt(1))
+      val count = con.head(s"SELECT COUNT(*) FROM $table")(_.getInt(1))
       val index = (count * r).toInt
-      con.head(s"select key, value from $table order by hash limit ?, 1", index) { rs =>
+      con.head(s"SELECT key, value FROM $table ORDER BY hash LIMIT ?, 1", index) { rs =>
         (keyType.get(rs, 1), valueType.get(rs, 2))
       }
     }
 
     def set(key:K, value:V):Unit = trx { con =>
       val hash = valueType.hash(value)
-      if(using(con.prepareStatement(s"update $table set value=?, hash=? where key=?")) { stmt =>
-        valueType.set(stmt, 1, value)
-        stmt.setInt(2, hash)
-        stmt.setObject(3, key)
-        stmt.executeUpdate()
-      } == 0) {
-        using(con.prepareStatement(s"insert into $table(key, hash, value) values(?, ?, ?)")) { stmt =>
-          stmt.setObject(1, key)
-          stmt.setInt(2, hash)
-          valueType.set(stmt, 3, value)
-          stmt.executeUpdate()
-        }
+      try {
+        con.exec(s"INSERT INTO $table(key, hash, value) VALUES(?, ?, ?)", key, hash, valueType.toStore(value))
         cachedSize.incrementAndGet()
+      } catch {
+        case ex:SQLException if ex.getErrorCode == ErrorCode.DUPLICATE_KEY_1 =>
+          con.exec(s"UPDATE $table SET value=?, hash=? WHERE key=?", valueType.toStore(value), hash, key)
       }
     }
 
     def foreach(f:(K, V) => Unit):Unit = trx { con =>
-      con.foreach(s"select key, value from $table order by key")(rs => f(keyType.get(rs, 1), valueType.get(rs, 2)))
+      con.foreach(s"SELECT key, value FROM $table ORDER BY key")(rs => f(keyType.get(rs, 1), valueType.get(rs, 2)))
     }
 
     def toCursor:Cursor[(K, V)] = {
       val con = newConnection
-      val stmt = con.prepareStatement(s"select key, value from $table order by key")
+      val stmt = con.prepareStatement(s"SELECT key, value FROM $table ORDER BY key")
       val rs = stmt.executeQuery()
       new Cursor({ rs => (keyType.get(rs, 1), valueType.get(rs, 2)) }, rs, stmt, con)
     }
 
     def toCursor(limit:Int, offset:Int = 0):Cursor[(K, V)] = {
       val con = newConnection
-      val stmt = con.prepareStatement(s"select key, value from $table order by key limit ? offset ?")
+      val stmt = con.prepareStatement(s"SELECT key, value FROM $table ORDER BY key LIMIT ? offset ?")
       stmt.setInt(1, limit)
       stmt.setInt(2, offset)
       val rs = stmt.executeQuery()
@@ -145,10 +140,15 @@ class Database(val url:String, val username:String, val password:String, driver:
 
     def size:Int = cachedSize.get()
 
-    def realSize:Int = trx(_.head(s"select count(*) from $table")(_.getInt(1)))
+    def realSize:Int = trx(_.head(s"SELECT COUNT(*) FROM $table")(_.getInt(1)))
 
-    def exists(key:K):Boolean = trx(_.head(s"select count(*) from $table where key=?", key)(_.getInt(1)) > 0)
+    def exists(key:K):Boolean = trx(_.head(s"SELECT COUNT(*) FROM $table WHERE key=?", key)(_.getInt(1)) > 0)
 
+    def export(out:PrintWriter, delim:String = "\t"):Unit = using(toCursor) { cursor =>
+      cursor.foreach { case (key, value) =>
+        out.println(s"${keyType.export(key)}$delim${valueType.export(value)}")
+      }
+    }
   }
 
   class Index[V](table:String, unique:Boolean)(implicit valueType:_ValueType[V]) {

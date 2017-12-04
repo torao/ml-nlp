@@ -6,6 +6,12 @@ import play.api.libs.json.{JsArray, JsObject, Json}
 import scala.annotation.tailrec
 import scala.collection.mutable
 
+/**
+  * パラグラフは複数の文を持つ自然言語データ。
+  *
+  * @param id        パラグラフのID
+  * @param sentences このパラグラフの文
+  */
 case class Paragraph(id:Int, sentences:Seq[Sentence]) {
 
   /**
@@ -77,6 +83,12 @@ object Paragraph {
     )
   }
 
+  /**
+    * パラグラフ中の一つの文を表すクラス。文節を内包する。
+    *
+    * @param id      この文のID
+    * @param clauses この文に属する文節
+    */
   case class Sentence(id:Int, clauses:Seq[Clause]) {
 
     /**
@@ -89,11 +101,11 @@ object Paragraph {
       @tailrec
       def _join(clause:Clause, map:Map[Int, Clause], buf:mutable.Buffer[Clause] = mutable.Buffer()):Seq[Clause] = {
         buf.append(clause)
-        if(clause.link >= 0) _join(map(clause.link), map) else buf
+        if(clause.link >= 0) _join(map(clause.link), map, buf) else buf
       }
 
       val map = clauses.groupBy(_.id).mapValues(_.head)
-      (map.keySet -- clauses.map(_.link).toSet).toSeq.map(id => map(id)).map { head =>
+      (map.keySet -- clauses.map(_.link).toSet).toSeq.map(map.apply).map { head =>
         Sentence(id, _join(head, map))
       }
     }
@@ -109,6 +121,13 @@ object Paragraph {
       val morphs = corpus.vocabulary.getAll(morphIds)
       morphIds.map(id => morphs(id).surface).mkString
     }
+
+    /**
+      * この文に含まれるすべての形態素インデックスを文内の出現順に並べたものを返します。
+      *
+      * @return 文の形態素インデックス
+      */
+    def toIndices:Seq[Int] = clauses.flatMap(_.morphs.map(_.morphId))
 
     def toJSON:JsObject = Json.obj(
       "id" -> id,

@@ -1,6 +1,6 @@
 package at.hazm.core
 
-import java.sql.{Connection, PreparedStatement, ResultSet}
+import java.sql.{Connection, ResultSet}
 
 import at.hazm.core.db.Database.makeHash
 import at.hazm.core.io.using
@@ -114,7 +114,9 @@ package object db {
       }
     }
 
-    def createTable[T](sql:String):Boolean = exec(s"CREATE TABLE IF NOT EXISTS $sql") > 0
+    def createTable(sql:String):Boolean = exec(s"CREATE TABLE IF NOT EXISTS $sql") > 0
+
+    def createIndex(sql:String, unique:Boolean = false):Boolean = exec(s"CREATE ${if(unique) "UNIQUE " else ""}INDEX IF NOT EXISTS $sql") > 0
   }
 
   class Cursor[T] private[db](converter:(ResultSet) => T, rs:ResultSet, r:AutoCloseable*) extends Iterator[T] with AutoCloseable {
@@ -159,6 +161,9 @@ package object db {
 
     /** 結果セットからこのクラスが定義する型の値を取得します。 */
     def get(rs:ResultSet, i:Int):T
+
+    /** データをエクスポート用に文字列変換 */
+    def export(value:T):String = value.toString
   }
 
   implicit object _IntKeyType extends _KeyType[Int] {
@@ -177,24 +182,37 @@ package object db {
     override val typeName:String = "varchar"
 
     def get(rs:ResultSet, i:Int):String = rs.getString(i)
+
+    override def export(value:String):String = {
+      val i = value.indexWhere(ch => ch == '\"' || Character.isISOControl(ch))
+      if(i < 0) value else {
+        "\"" + value.drop(i).foldLeft(new StringBuilder(value.substring(0, i))) { case (buffer, ch) =>
+          if(ch == '\"') buffer.append("\"\"") else buffer.append(ch)
+          buffer
+        } + "\""
+      }
+    }
   }
 
   trait _ValueType[T] {
     val typeName:String
 
-    def set(stmt:PreparedStatement, i:Int, value:T):Unit
+    def toStore(value:T):Object
 
     def get(rs:ResultSet, i:Int):T
 
     def hash(value:T):Int
 
     def equals(value1:T, value2:T):Boolean
+
+    /** データをエクスポート用に文字列変換 */
+    def export(value:T):String = value.toString
   }
 
   trait _ValueTypeForStringColumn[T] extends _ValueType[T] {
     val typeName:String = "clob"
 
-    def set(stmt:PreparedStatement, i:Int, value:T):Unit = stmt.setString(i, to(value))
+    def toStore(value:T):Object = to(value)
 
     def get(rs:ResultSet, i:Int):T = from(rs.getString(i))
 
@@ -210,7 +228,7 @@ package object db {
   trait _ValueTypeForBinaryColumn[T] extends _ValueType[T] {
     val typeName:String = "blob"
 
-    def set(stmt:PreparedStatement, i:Int, value:T):Unit = stmt.setBytes(i, to(value))
+    def toStore(value:T):Object = to(value)
 
     def get(rs:ResultSet, i:Int):T = from(rs.getBytes(i))
 
@@ -227,12 +245,24 @@ package object db {
     override def from(text:String):String = text
 
     override def to(value:String):String = value
+
+    override def export(value:String):String = _StringKeyType.export(value)
   }
 
   implicit object _IntSeqValueType extends _ValueTypeForStringColumn[Seq[Int]] {
     override def from(text:String):Seq[Int] = text.split(" ").filter(_.nonEmpty).map(_.toInt)
 
     override def to(value:Seq[Int]):String = value.mkString(" ")
+
+    override def export(value:Seq[Int]):String = value.mkString(" ")
+  }
+
+  implicit object _DoubleSeqValueType extends _ValueTypeForStringColumn[Seq[Double]] {
+    override def from(text:String):Seq[Double] = text.split(" ").filter(_.nonEmpty).map(_.toDouble)
+
+    override def to(value:Seq[Double]):String = value.mkString(" ")
+
+    override def export(value:Seq[Double]):String = value.mkString(" ")
   }
 
 }

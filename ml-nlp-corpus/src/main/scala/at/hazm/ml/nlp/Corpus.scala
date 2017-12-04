@@ -2,12 +2,13 @@ package at.hazm.ml.nlp
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, InputStreamReader}
 import java.nio.charset.StandardCharsets
-import java.sql.{PreparedStatement, ResultSet}
+import java.sql.ResultSet
 import java.util.concurrent.atomic.AtomicInteger
 
 import at.hazm.core.db._
 import at.hazm.core.io.{readAllChars, using}
 import at.hazm.ml.nlp.Corpus._ParagraphType
+import at.hazm.ml.nlp.corpus.PerforatedSentences
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
 import play.api.libs.json.{JsObject, Json}
 
@@ -38,6 +39,9 @@ class Corpus(val db:Database, val namespace:String) {
     /** ID 設定用のシーケンス */
     private[this] val sequence = new AtomicInteger()
 
+    /** 形態素ごとの特徴ベクトル */
+    val features = new db.KVS[Int, Seq[Double]](s"${table}_features")
+
     db.trx { con =>
       // コーパステーブルの作成
       con.createTable(
@@ -54,9 +58,11 @@ class Corpus(val db:Database, val namespace:String) {
       con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_hash ON $table(hash)")
       this.sequence.set(con.head(s"select count(*) from $table")(_.getInt(1)))
 
-      // 構築時にコーパスの整合性を確認
-      if(con.head(s"SELECT COUNT(*) FROM $table WHERE id < 0 OR id >= ?", sequence.get())(_.getInt(1)) > 0) {
-        throw new IllegalStateException(s"vocabulary id conflict in $table (perhaps some morphs removed?)")
+      // 構築時にコーパスの整合性を確認 (H2 Database は OR でつなげると異様に遅い)
+      val invalidIds = con.query(s"SELECT id FROM $table WHERE id < 0")(_.getInt(1)).toList :::
+        con.query(s"SELECT id FROM $table WHERE id >= ?", sequence.get())(_.getInt(1)).toList
+      if(invalidIds.nonEmpty) {
+        throw new IllegalStateException(s"vocabulary id conflict in $table (perhaps some morphs removed?): ${invalidIds.mkString(", ")}")
       }
     }
 
@@ -128,6 +134,33 @@ class Corpus(val db:Database, val namespace:String) {
       }
     }
 
+    /**
+      * 指定された表現 (surface) でボキャブラリに登録されている形態素を参照します。該当する形態素が未登録の場合は長さ 0 のシーケンスを
+      * 返します。
+      *
+      * @param surface 形態素を参照する表現
+      * @return 表現に一致する形態素とそのID
+      */
+    def instanceOf(surface:String):Seq[(Int, Morph)] = db.trx { con =>
+      con.query(s"SELECT * FROM $table WHERE surface=?", surface) { rs =>
+        (rs.getInt("id"), rs2Morph(rs))
+      }.toList
+    }
+
+    /**
+      * 指定された表現 (surface) でボキャブラリに登録されている形態素を参照します。該当する形態素が未登録の場合は長さ 0 のシーケンスを
+      * 返します。
+      *
+      * @param surfaces 形態素を参照する表現
+      * @return 表現に一致する形態素とそのID
+      */
+    def instanceOf(surfaces:Seq[String]):Seq[(Int, Morph)] = db.trx { con =>
+      val in = surfaces.map(_ => "?").mkString(",")
+      con.query(s"SELECT * FROM $table WHERE surface IN ($in)", surfaces) { rs =>
+        (rs.getInt("id"), rs2Morph(rs))
+      }.toList
+    }
+
     private[this] def rs2Morph(rs:ResultSet):Morph = Morph(
       surface = rs.getString("surface"),
       pos1 = rs.getString("pos1"),
@@ -140,8 +173,6 @@ class Corpus(val db:Database, val namespace:String) {
       reading = rs.getString("reading"),
       pronunciation = rs.getString("pronunciation")
     )
-
-    private[this] def literal(text:String):String = "'" + text.replaceAll("'", "''") + "'"
 
     /**
       * 指定された形態素をこのボキャブラリに登録しその ID を返します。表現 (surface) と品詞 (pos) が等しい形態素が既に登録されている場合は
@@ -192,6 +223,7 @@ class Corpus(val db:Database, val namespace:String) {
 
     /**
       * 指定された単語に対するこのボキャブラリ上のインデックスを参照します。該当する単語が登録されていない場合は負の値を返します。
+      * 単語の表現に対して複数の ID が割り当てられている場合はどれか一つの ID を返します。
       *
       * @param term インデックスを検索する単語
       * @return 単語のインデックス、または負の値
@@ -199,6 +231,14 @@ class Corpus(val db:Database, val namespace:String) {
     def indexOf(term:String):Int = db.trx { con =>
       con.headOption(s"SELECT id FROM $table WHERE term=?", term)(_.getInt(1)).getOrElse(-1)
     }
+
+    /**
+      * 指定された単語に対するこのボキャブラリ上のインデックスを参照します。
+      *
+      * @param term インデックスを検索する単語
+      * @return 単語のインデックス
+      */
+    def indicesOf(term:String):Seq[Int] = db.trx(_.query(s"SELECT id FROM $table WHERE term=?", term)(_.getInt(1)).toList)
 
     /**
       * 指定された接頭辞から始まる単語を抽出します。
@@ -216,6 +256,11 @@ class Corpus(val db:Database, val namespace:String) {
     */
   val paragraphs = new db.KVS[Int, Paragraph](tableName("paragraphs"))(_IntKeyType, _ParagraphType)
 
+  /**
+    * このコーパスで最短文を保持するストレージです。
+    */
+  val perforatedSentences = new PerforatedSentences(db, tableName("perforated"), this)
+
 }
 
 object Corpus {
@@ -223,11 +268,11 @@ object Corpus {
   private[Corpus] object _ParagraphType extends _ValueType[Paragraph] {
     val typeName:String = "blob"
 
-    def set(stmt:PreparedStatement, i:Int, value:Paragraph):Unit = {
+    def toStore(value:Paragraph):AnyRef = {
       val json = Json.stringify(value.toJSON)
       val baos = new ByteArrayOutputStream()
       using(new BZip2CompressorOutputStream(baos)) { out => out.write(json.getBytes(StandardCharsets.UTF_8)) }
-      stmt.setBytes(i, baos.toByteArray)
+      baos.toByteArray
     }
 
     def get(rs:ResultSet, i:Int):Paragraph = {
@@ -242,6 +287,8 @@ object Corpus {
     def hash(value:Paragraph):Int = value.id
 
     def equals(value1:Paragraph, value2:Paragraph):Boolean = value1.id == value2.id
+
+    override def export(value:Paragraph):String = Json.stringify(value.toJSON)
   }
 
 }

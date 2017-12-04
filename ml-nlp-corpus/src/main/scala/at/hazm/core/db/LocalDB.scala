@@ -10,9 +10,12 @@ import org.slf4j.LoggerFactory
   *
   * @param file データベースファイル
   */
-class LocalDB(file:File, readOnly:Boolean = false) extends Database({
-  if(!file.exists()) LocalDB.logger.info(s"creating new local database: ${file.getAbsolutePath}")
-  s"jdbc:h2:${file.getAbsolutePath}"
+class LocalDB(val file:File, readOnly:Boolean = false) extends Database({
+  val real = new File(file.getAbsoluteFile.getParentFile, file.getName + ".h2.mv.db")
+  if(!real.exists()) {
+    LocalDB.logger.info(s"creating new local database: ${real.getAbsolutePath}")
+  }
+  s"jdbc:h2:${file.getAbsolutePath}.h2"
 }, "", "", classOf[Driver].getName, readOnly)
 
 object LocalDB {

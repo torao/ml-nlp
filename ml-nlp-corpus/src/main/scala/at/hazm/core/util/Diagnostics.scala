@@ -117,7 +117,7 @@ object Diagnostics {
     def report(current:Long):Unit = report(current, "")
 
     private[this] def _report(current:Long, message:String = ""):Unit = {
-      if(current < this._current.get()){
+      if(current < this._current.get()) {
         logger.warn(s"current value less than progressing state: $current < ${this._current}")
       }
       this._current.set(current)
@@ -129,10 +129,11 @@ object Diagnostics {
         print()
       } else if(current == init + 1) {
         print()
-      }
-      if(_stopped.get()) {
+      } else if(_stopped.get()) {
+        logger.warn(f"iteration finished or user interrupted: $current%,d for $max%,d")
         throw new Break()
       }
+
     }
 
     def stopped:Boolean = _stopped.get

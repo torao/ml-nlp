@@ -24,7 +24,7 @@ class Wikipedia2Corpus(file:File) {
   import Wikipedia2Corpus.logger
 
   private[this] val db = new LocalDB(file)
-  private[this] val corpus = new Corpus(db, "wikipedia")
+  private[this] val corpus = new Corpus(db)
 
   /**
     * 指定された Extract 済み Wikipedia データ (id title content の TSV 圧縮形式) からコーパスを作成します。
@@ -41,7 +41,7 @@ class Wikipedia2Corpus(file:File) {
       val docCount = countLines(src, db)
       val current = new LongAdder()
       current.add(corpus.paragraphs.size)
-      new Progress(src.getName, corpus.paragraphs.size, docCount).apply { prog =>
+      (new Progress(src.getName, corpus.paragraphs.size, docCount)) { prog =>
         (new FileSource(src, gzip = true) :> new SplitLine()).drop(1).map { line:String =>
           val Array(id, title, content) = line.split("\t")
           (id.toInt, title, content)

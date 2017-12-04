@@ -18,7 +18,7 @@ def listFiles(parent:File = dir):List[File] = {
 
 //val out = new BufferedWriter(new OutputStreamWriter(System.out))
 val out = new BufferedWriter(new OutputStreamWriter(new GZIPOutputStream(new FileOutputStream(args(1))), "UTF-8"))
-out.write("PAGE-ID\tTITLE\tCONTENT")
+out.write("PAGE-ID\tTITLE\tCONTENT\n")
 
 def flush(out:Writer, id:Int, title:String, text:String):Unit = out.write(s"$id\t$title\t$text\n")
 

@@ -6,6 +6,7 @@
 *.db
 *.bak
 *.iml
+*.tsv
 
 # sbt specific
 .cache

@@ -26,6 +26,7 @@ object Morph2FeatureVector {
     val w2vFile = new File(file.getParentFile, file.getName + ".w2v")
     lazy val w2v = if(!w2vFile.exists()) {
 
+      /*
       // SentenceIterator の reset() が何度か呼ばれることで W2V 処理開始まで 30 分程度かかってしまうためテキストファイル化して行う
       val txtFile = new File(file.getParentFile, file.getName + ".paragraphs.txt")
       if(!txtFile.exists()) {
@@ -42,10 +43,12 @@ object Morph2FeatureVector {
           }
         }
       }
+      */
 
       // Word2Vec 処理の開始
-      logger.info(s"creating word2vec model: $txtFile -> ${w2vFile.getName}")
-      val it = new LineSentenceIterator(txtFile)
+      // logger.info(s"creating word2vec model: $txtFile -> ${w2vFile.getName}")
+      // val it = new LineSentenceIterator(txtFile)
+      val it = new SI(corpus)
       val w2v = new Word2Vec.Builder()
         .minWordFrequency(5)
         .iterations(1)
@@ -77,7 +80,7 @@ object Morph2FeatureVector {
       }
     }
 
-    logger.info(f"paragraphs: ${corpus.paragraphs.size}%,d")
+    logger.info(f"paragraphs: ${corpus.documents.size}%,d")
     logger.info(f"vocabulary: ${corpus.vocabulary.size}%,d")
     logger.info(f"featured vocabulary: ${corpus.vocabulary.features.size}%,d")
     logger.info(f"word2vec model paragraph: ${w2v.getVocab.totalNumberOfDocs()}")
@@ -101,10 +104,10 @@ object Morph2FeatureVector {
     * @param corpus コーパス
     */
   private[this] class SI(corpus:Corpus) extends SentenceIterator {
-    private[this] var cursor = corpus.paragraphs.toCursor
+    private[this] var cursor = corpus.documents.toCursor
     private[this] var preProcessor:SentencePreProcessor = _
     private[this] var prog:Option[Progress] = None
-    private[this] val max = corpus.paragraphs.size
+    private[this] val max = corpus.documents.size
 
     override def setPreProcessor(preProcessor:SentencePreProcessor):Unit = this.preProcessor = preProcessor
 
@@ -123,7 +126,7 @@ object Morph2FeatureVector {
 
     override def reset():Unit = {
       cursor.close()
-      cursor = corpus.paragraphs.toCursor
+      cursor = corpus.documents.toCursor
       prog.foreach { p =>
         p.report(max)
         prog = None

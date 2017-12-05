@@ -10,13 +10,16 @@ import org.slf4j.LoggerFactory
 object Paragraph2PerforatedSentence {
   private[this] val logger = LoggerFactory.getLogger(getClass.getName.dropRight(1))
 
-  def init(corpus:Corpus):Unit = if(corpus.perforatedSentences.size == 0 || true) {
-//    (new Progress("perforate sentence", 0, corpus.paragraphs.size)) { prog =>
-//      corpus.paragraphs.foreach { case (_, paragraph) =>
-//        corpus.perforatedSentences.register(paragraph)
-//        prog.report(paragraph.id.toString)
-//      }
-//    }
-  }
+  def init(corpus:Corpus):Unit = {
+    val resume = corpus.perforatedSentences.chads.maxDocId
+    val docSize = corpus.perforatedSentences.chads.docSize
 
+    (new Progress("perforate sentence", docSize, corpus.documents.size)) { prog =>
+      corpus.documents.toCursor("key >= ?", resume).foreach { case (_, doc) =>
+        corpus.perforatedSentences.register(doc)
+        prog.report(doc.id.toString)
+      }
+    }
+
+  }
 }

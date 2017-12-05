@@ -6,7 +6,7 @@ import java.sql.ResultSet
 
 import at.hazm.core.db._
 import at.hazm.core.io.{readAllChars, using}
-import at.hazm.ml.nlp.Corpus._DocumentType
+import at.hazm.ml.nlp.Corpus._RelativeDocumentType
 import at.hazm.ml.nlp.corpus.{PerforatedSentences, Vocabulary}
 import at.hazm.ml.nlp.model.{Morph, RelativeDocument}
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
@@ -20,6 +20,11 @@ import play.api.libs.json.Json
   */
 class Corpus(val db:Database, val namespace:String) {
 
+  // 名前空間が指定されていたらスキーマの作成
+  if(namespace.nonEmpty) {
+    db.trx(_.exec(s"CREATE SCHEMA IF NOT EXISTS $namespace"))
+  }
+
   def this(db:Database) = this(db, "")
 
   /**
@@ -28,7 +33,7 @@ class Corpus(val db:Database, val namespace:String) {
     * @param name テーブルの識別子
     * @return 利用可能なテーブル名
     */
-  private[this] def tableName(name:String):String = if(namespace.isEmpty) name else s"${namespace}_$name"
+  private[this] def tableName(name:String):String = if(namespace.isEmpty) name else s"$namespace.$name"
 
   /**
     * ボキャブラリ (単語の集合) を表すクラスです。
@@ -36,9 +41,9 @@ class Corpus(val db:Database, val namespace:String) {
   val vocabulary:Vocabulary = new Vocabulary(db, tableName("vocabulary"))
 
   /**
-    * このコーパスで文書 (Paragraph) を保存する KVS ストレージです。
+    * このコーパスでインデックスづけられた文書を保存する KVS ストレージです。
     */
-  val paragraphs = new db.KVS[Int, RelativeDocument[Morph.Instance]](tableName("documents"))(_IntKeyType, _DocumentType)
+  val documents = new db.KVS[Int, RelativeDocument[Morph.Instance]](tableName("documents"))(_IntKeyType, _RelativeDocumentType)
 
   /**
     * このコーパスで最短文を保持するストレージです。
@@ -50,7 +55,7 @@ class Corpus(val db:Database, val namespace:String) {
 object Corpus {
   private[this] type STORE_DOC = RelativeDocument[Morph.Instance]
 
-  private[Corpus] object _DocumentType extends _ValueType[STORE_DOC] {
+  private[Corpus] object _RelativeDocumentType extends _ValueType[STORE_DOC] {
     val typeName:String = "BYTEA"
 
     def toStore(value:STORE_DOC):AnyRef = {

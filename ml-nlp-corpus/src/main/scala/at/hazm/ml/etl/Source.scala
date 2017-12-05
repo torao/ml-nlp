@@ -1,7 +1,8 @@
 package at.hazm.ml.etl
 
-import at.hazm.ml.etl.Source.Injection
+import at.hazm.ml.etl.Source.{Filter, Injection}
 
+import scala.annotation.tailrec
 import scala.collection.mutable
 
 /**
@@ -45,6 +46,18 @@ trait Source[T] extends Pipe[T] {
   /** append() のエイリアスです。 */
   def :>[U](f:(T) => U):Source[U] = append(f)
 
+  /**
+    * 指定されたフィルタ関数を連結します。
+    *
+    * @param f 評価関数
+    * @return 評価関数によって選別されたソース
+    */
+  def appendFilter(f:(T) => Boolean):Source[T] = append(new Filter(f))
+
+  /** appendFilter() のエイリアスです。 */
+  def :|(f:(T) => Boolean):Source[T] = appendFilter(f)
+
+
 }
 
 object Source {
@@ -86,7 +99,6 @@ object Source {
     * @param f 変換処理
     * @tparam IN  入力データ型
     * @tparam OUT 出力データ型
-    * @return 変換処理に対する Transform
     */
   private[Source] class Injection[IN, OUT](f:(IN) => OUT) extends Transform[IN, OUT] {
 
@@ -99,6 +111,39 @@ object Source {
     override def close():Unit = None
 
     def transform(data:IN):OUT = f(data)
+  }
+
+  /**
+    * 指定された評価関数を使用してデータのフィルタリングを行う Transform を作成します。
+    *
+    * @param f 評価関数
+    * @tparam T 入出力データ型
+    */
+  private[Source] class Filter[T](f:(T) => Boolean) extends Transform[T, T] {
+    private[this] var cache:Option[T] = None
+
+    override final def hasNext:Boolean = {
+      prefetch()
+      cache.isDefined
+    }
+
+    override final def next():T = {
+      val value = cache.get
+      cache = None
+      value
+    }
+
+    override def reset():Unit = cache = None
+
+    override def close():Unit = cache = None
+
+    @tailrec
+    private[this] def prefetch():Unit = if(source.hasNext) {
+      val value = source.next()
+      if(f(value)) cache = Some(value) else prefetch()
+    } else {
+      cache = None
+    }
   }
 
 }

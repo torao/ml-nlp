@@ -1,8 +1,8 @@
 package at.hazm.ml.nlp.corpus
 
 import at.hazm.core.db._
-import at.hazm.ml.nlp.model.Morph
-import at.hazm.ml.nlp.{Corpus, Paragraph}
+import at.hazm.ml.nlp.Corpus
+import at.hazm.ml.nlp.model.{Morph, RelativeDocument}
 
 import scala.collection.mutable
 
@@ -23,15 +23,17 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
     */
   private[this] def tableName(name:String):String = if(namespace.isEmpty) name else s"${namespace}_$name"
 
+  private[this] val perforatedTable = tableName("sentences")
+
   /**
     * 最短化された文を保持するための KVS。
     */
-  private[this] val shortenedSentences = new db.KVS[Int, String](tableName("shortened_sentences"))
+  private[this] val shortenedSentences = new db.Index[String](perforatedTable, unique = true)
 
   /**
     * 最短文から削除する形態素の表現。
     */
-  private[this] val StopWords = Set("、")
+  private[this] val StopWords = Set("、", "。")
 
   /**
     * プレースホルダに置き換える品詞。
@@ -43,77 +45,84 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
   /**
     * 指定されたパラグラフを登録します。
     *
-    * @param paragraph パラグラフ
+    * @param doc パラグラフ
     */
-  def register(paragraph:Paragraph):Unit = {
-    val morphs = corpus.vocabulary.getAll(paragraph.toIndices.distinct)
-    paragraph.sentences.flatMap { sentence =>
+  def register(doc:RelativeDocument[Morph.Instance]):Unit = {
+    // プレースホルダに置き換える形態素を決定するために形態素を取得する
+    val morphs = corpus.vocabulary.getAll(doc.tokens.map(_.morphId).distinct)
+    doc.sentences.zipWithIndex.flatMap { case (sentence, sentenceId) =>
       // 最短文の形態素シーケンスに分解
-      sentence.breakdown().map(s => (sentence.id, s.clauses.flatMap(_.morphs.map(m => (m.morphId, morphs(m.morphId))))))
-    }.map { case (sentenceId, sentence) =>
-      (sentenceId, optimize(sentence))
-    }.filter(_._2.nonEmpty).foreach { case (sentenceId, sentence) =>
-      // データベースに登録
-      val args = mutable.HashMap[String, Int]()
-      val morphIds = sentence.map { case (morphId, morph) =>
-        POS2Sign.get(morph.pos1) match {
-          case Some(prefix) =>
-            val key = s"$prefix${args.size}"
-            args.put(key, morphId)
-            key
-          case None => morphId.toString
-        }
-      }.mkString(" ")
+      sentence.breakdown().map { s =>
+        s.flatten.tokens.map(m => (m.morphId, morphs(m.morphId)))
+      }.map(optimize).filter(_._1.nonEmpty).zipWithIndex.map(t => (doc.id, sentenceId, t._2, t._1._1, t._1._2))
+    }.foreach { case (docId, sentId, pfId, keys, args) =>
 
       // 最短文の登録
-      val id = shortenedSentences.synchronized {
-        val ids = shortenedSentences.getIds(morphIds)
-        if(ids.isEmpty) {
-          val id = shortenedSentences.size
-          shortenedSentences.set(id, morphIds)
-          id
-        } else ids.head
-      }
+      val id = shortenedSentences.register(keys)
 
       // プレースホルダー部分に入る形態素の登録
-      if(args.nonEmpty){
-        placeholders.add(id, paragraph.id, sentenceId, args.toMap)
+      if(args.nonEmpty) {
+        chads.add(id, docId, sentId, args)
       }
     }
   }
 
-  private[this] def optimize(sentence:Seq[(Int, Morph)]):Seq[(Int, Morph)] = {
-    // 文中の不要な形態素を削除
-    sentence.filter { s => !StopWords.contains(s._2.surface) }
+  private[this] def optimize(sentence:Seq[(Int, Morph)]):(String, Map[String, Int]) = {
+    val buf = mutable.Buffer[String]()
+    val args = mutable.HashMap[String, Int]()
+    var prePOS = ""
+    sentence.filter(s => !StopWords.contains(s._2.surface)).foreach { case (id, m) =>
+      // 連続したプレースホルダ対象の品詞を削除
+      if(!POS2Sign.contains(m.pos1) || prePOS != m.pos1) {
+        val key = POS2Sign.get(m.pos1) match {
+          case Some(prefix) =>
+            val key = s"$prefix${args.size}"
+            args.put(key, id)
+            key
+          case None => id.toString
+        }
+        buf.append(key)
+        prePOS = m.pos1
+      }
+    }
+    (buf.mkString(" "), args.toMap)
   }
 
 
   /**
     *
     */
-  object placeholders {
+  object chads {
 
-    private[this] val placeholderTable = tableName("placeholders")
+    private[this] val placeholderTable = tableName("chads")
 
     db.trx { con =>
       con.createTable(
         s"""$placeholderTable(
-           |  id INTEGER NOT NULL PRIMARY KEY AUTO_INCREMENT,
-           |  shorten_sentence_id INTEGER NOT NULL,
-           |  paragraph_id INTEGER NOT NULL,
+           |  id SERIAL NOT NULL PRIMARY KEY,
+           |  document_id INTEGER NOT NULL,
            |  sentence_id INTEGER NOT NULL,
+           |  perforated_id INTEGER NOT NULL,
            |  placeholder VARCHAR(6) NOT NULL,
            |  morph_id INTEGER NOT NULL)""".stripMargin)
-      con.createIndex(s"${placeholderTable}_idx00 on $placeholderTable(shorten_sentence_id)")
-      con.createIndex(s"${placeholderTable}_idx01 on $placeholderTable(paragraph_id)")
-      con.createIndex(s"${placeholderTable}_idx02 on $placeholderTable(sentence_id)")
+      con.createIndex(s"${placeholderTable}_idx00 on $placeholderTable(document_id)")
+      con.createIndex(s"${placeholderTable}_idx01 on $placeholderTable(sentence_id)")
+      con.createIndex(s"${placeholderTable}_idx02 on $placeholderTable(perforated_id)")
       con.createIndex(s"${placeholderTable}_idx03 on $placeholderTable(morph_id)")
     }
 
     def add(shortenSentenceId:Int, paragraphId:Int, sentenceId:Int, morphs:Map[String, Int]):Unit = db.trx { con =>
       val placeholder = morphs.map(_ => "(?,?,?,?,?)").mkString(",")
       val args = morphs.flatMap(m => Seq(shortenSentenceId, paragraphId, sentenceId, m._1, m._2)).toSeq
-      con.exec(s"INSERT INTO $placeholderTable(shorten_sentence_id,paragraph_id,sentence_id,placeholder,morph_id) VALUES$placeholder", args:_*)
+      con.exec(s"INSERT INTO $placeholderTable(perforated_id,document_id,sentence_id,placeholder,morph_id) VALUES$placeholder", args:_*)
+    }
+
+    def maxDocId:Int = db.trx { con =>
+      con.headOption(s"SELECT MAX(document_id) FROM $placeholderTable")(_.getInt(1)).getOrElse(-1)
+    }
+
+    def docSize:Int = db.trx { con =>
+      con.headOption(s"SELECT COUNT(document_id) FROM $placeholderTable GROUP BY document_id")(_.getInt(1)).getOrElse(0)
     }
 
   }

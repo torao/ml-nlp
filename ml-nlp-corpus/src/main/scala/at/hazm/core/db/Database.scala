@@ -79,7 +79,7 @@ class Database(val url:String, val username:String, val password:String, driver:
     private[this] val cachedSize = new AtomicInteger(realSize)
 
     def apply(key:K):V = get(key).getOrElse {
-      throw new IllegalArgumentException(s"value not found: $key")
+      throw new IllegalArgumentException(s"値が存在しません: $key")
     }
 
     def get(key:K):Option[V] = trx {
@@ -109,13 +109,9 @@ class Database(val url:String, val username:String, val password:String, driver:
 
     def set(key:K, value:V):Unit = trx { con =>
       val hash = valueType.hash(value)
-      try {
-        con.exec(s"INSERT INTO $table(key, hash, value) VALUES(?, ?, ?)", key, hash, valueType.toStore(value))
-        cachedSize.incrementAndGet()
-      } catch {
-        case ex:SQLException if ex.getErrorCode == ErrorCode.DUPLICATE_KEY_1 =>
-          con.exec(s"UPDATE $table SET value=?, hash=? WHERE key=?", valueType.toStore(value), hash, key)
-      }
+      val vs = valueType.toStore(value)
+      con.exec(s"INSERT INTO $table(key, hash, value) VALUES(?, ?, ?) ON CONFLICT(key) DO UPDATE SET hash=?, value=?", key, hash, vs, hash, vs)
+      cachedSize.incrementAndGet()
     }
 
     def foreach(f:(K, V) => Unit):Unit = trx { con =>

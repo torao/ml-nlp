@@ -35,7 +35,7 @@ object Morph2FeatureVector {
           new Progress("export", 0, corpus.paragraphs.size) {
             prog =>
             cursor.foreach { case (id, par) =>
-              out.println(par.toIndices.mkString(" "))
+              out.println(par.tokens.map(_.morphId).mkString(" "))
               out.flush()
               prog.report(id.toString)
             }
@@ -118,7 +118,7 @@ object Morph2FeatureVector {
         prog = Some(new Progress("word2vec", 0, max))
         prog.get
       }.report(s"reading doc: $id")
-      doc.toIndices.mkString(" ")
+      doc.tokens.map(_.morphId).mkString(" ")
     }
 
     override def reset():Unit = {

@@ -1,7 +1,8 @@
 package at.hazm.ml.nlp.corpus
 
 import at.hazm.core.db._
-import at.hazm.ml.nlp.{Corpus, Morph, Paragraph}
+import at.hazm.ml.nlp.model.Morph
+import at.hazm.ml.nlp.{Corpus, Paragraph}
 
 import scala.collection.mutable
 

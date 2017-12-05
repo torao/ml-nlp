@@ -11,12 +11,12 @@ object Paragraph2PerforatedSentence {
   private[this] val logger = LoggerFactory.getLogger(getClass.getName.dropRight(1))
 
   def init(corpus:Corpus):Unit = if(corpus.perforatedSentences.size == 0 || true) {
-    (new Progress("perforate sentence", 0, corpus.paragraphs.size)) { prog =>
-      corpus.paragraphs.foreach { case (_, paragraph) =>
-        corpus.perforatedSentences.register(paragraph)
-        prog.report(paragraph.id.toString)
-      }
-    }
+//    (new Progress("perforate sentence", 0, corpus.paragraphs.size)) { prog =>
+//      corpus.paragraphs.foreach { case (_, paragraph) =>
+//        corpus.perforatedSentences.register(paragraph)
+//        prog.report(paragraph.id.toString)
+//      }
+//    }
   }
 
 }

@@ -12,6 +12,7 @@ libraryDependencies ++= Seq(
   "org.scala-lang.modules" %% "scala-xml" % "1.0.6",
   "org.codelibs" % "elasticsearch-analysis-kuromoji-neologd" % "5.5.+",
   "org.apache.tomcat" % "tomcat-jdbc" % "8.5.+",
+  "org.postgresql" % "postgresql" % "42.1.+",
   "com.h2database" % "h2" % "1.4.+",
   "org.xerial" % "sqlite-jdbc" % "3.16.+",
   "org.apache.commons" % "commons-compress" % "1.8",

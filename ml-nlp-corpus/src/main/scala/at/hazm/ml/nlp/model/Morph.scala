@@ -1,6 +1,12 @@
-package at.hazm.ml.nlp
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+ *  agreements; and to You under the Apache License, Version 2.0.
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ */
+package at.hazm.ml.nlp.model
 
-import play.api.libs.json.{JsObject, Json}
+import at.hazm.ml.nlp.model.Morph.AbstractMorph
+import play.api.libs.json._
 
 import scala.collection.mutable
 
@@ -8,44 +14,37 @@ import scala.collection.mutable
   * 形態素を現すクラスです。
   * IPADIC をベースとした形態素解析と同等のプロパティを持ちます。
   *
-  * @param surface         表現
+  * @param surface         表現の基本形
   * @param pos1            品詞レベル 1 (名詞, 助詞, 動詞, 感嘆詞, etc.)
   * @param pos2            品詞レベル 2 (一般, 連体化, 係助詞, 自立, etc.)
   * @param pos3            品詞レベル 3 (組織, 一般, etc.)
   * @param pos4            品詞レベル 4
   * @param conjugationType 活用型
   * @param conjugationForm 活用形
-  * @param baseForm        基本形
   * @param reading         読み
   * @param pronunciation   発音
   * @see https://github.com/atilika/kuromoji/blob/master/kuromoji-ipadic/src/main/java/com/atilika/kuromoji/ipadic/Token.java
   */
 case class Morph(surface:String, pos1:String, pos2:String, pos3:String, pos4:String,
-                 conjugationType:String, conjugationForm:String, baseForm:String, reading:String, pronunciation:String) {
-
-  /**
-    * この形態素の品詞をハイフンで連結した文字列です。
-    */
-  lazy val pos:String = Seq(pos1, pos2, pos3, pos4).reverse.dropWhile(_.isEmpty).reverse.mkString("-")
+                 conjugationType:String, conjugationForm:String, reading:String, pronunciation:String) extends AbstractMorph {
 
   /**
     * 形態素の同一性を比較するためのキーを参照します。このキーが一致する形態素は同一とみなすことができます。
     *
     * @return 同一性のキー
     */
-  def key:String = surface + ":" + pos
+  def key:String = s"$surface:$pos"
 
   /**
     * この形態素の内容を JSON 形式に変換します。
     *
     * @return JSON 表現
     */
-  def toJSON:JsObject = Json.obj(
+  def toJSON:JsValue = Json.obj(
     "surface" -> surface,
     "pos" -> Json.arr(pos1, pos2, pos3, pos4),
     "conj-type" -> conjugationType,
     "conj-form" -> conjugationForm,
-    "base" -> baseForm,
     "reading" -> reading,
     "pronunciation" -> pronunciation
   )
@@ -59,7 +58,7 @@ object Morph {
     * @param json 形態素を復元する JSON
     * @return 復元した形態素
     */
-  def fromJSON(json:JsObject):Morph = Morph(
+  def fromJSON(json:JsValue):Morph = Morph(
     surface = (json \ "surface").as[String],
     pos1 = (json \ "pos").apply(0).as[String],
     pos2 = (json \ "pos").apply(1).as[String],
@@ -67,10 +66,87 @@ object Morph {
     pos4 = (json \ "pos").apply(3).as[String],
     conjugationType = (json \ "conj-type").as[String],
     conjugationForm = (json \ "conj-form").as[String],
-    baseForm = (json \ "base").as[String],
     reading = (json \ "reading").as[String],
     pronunciation = (json \ "pronunciation").as[String]
   )
+
+  /**
+    * 形態素を表すクラスです。
+    * IPADIC をベースとした形態素解析と同等のプロパティを持ちます。
+    *
+    * @see https://github.com/atilika/kuromoji/blob/master/kuromoji-ipadic/src/main/java/com/atilika/kuromoji/ipadic/Token.java
+    */
+  abstract class AbstractMorph extends Token {
+    /** 表現の基本形 */
+    def surface:String
+
+    /** 品詞レベル 1 (名詞, 助詞, 動詞, 感嘆詞, etc.) */
+    def pos1:String
+
+    /** 品詞レベル 2 (一般, 連体化, 係助詞, 自立, etc.) */
+    def pos2:String
+
+    /** 品詞レベル 3 (組織, 一般, etc.) */
+    def pos3:String
+
+    /** 品詞レベル 4 */
+    def pos4:String
+
+    /** 活用型 */
+    def conjugationType:String
+
+    /** 活用形 */
+    def conjugationForm:String
+
+    /** 読み */
+    def reading:String
+
+    /** 発音 */
+    def pronunciation:String
+
+    /**
+      * この形態素の品詞をハイフンで連結した文字列です。
+      */
+    lazy val pos:String = Seq(pos1, pos2, pos3, pos4).reverse.dropWhile(_.isEmpty).reverse.mkString("-")
+
+    /**
+      * 形態素の同一性を比較するためのキーを参照します。このキーが一致する形態素は同一とみなすことができます。
+      *
+      * @return 同一性のキー
+      */
+    def key:String
+
+  }
+
+  /**
+    * 文章中に存在する形態素のインスタンスです。実際に文章中での表現とその属性を持ちます。
+    *
+    * @param surface 形態素のインスタンス表現
+    * @param morphId 形態素ID
+    * @param attr    属性
+    */
+  case class Instance(surface:String, morphId:Int, attr:Map[String, String]) extends Token {
+    /** このシーケンスの形態素を参照します。 */
+    def morphs:Seq[Instance] = Seq(this)
+
+    /**
+      * この形態素インスタンスを JSON で表現します。
+      */
+    def toJSON:JsValue = {
+      val base = Json.arr(surface, morphId)
+      if(attr.isEmpty) base else base :+ JsObject(attr.mapValues(s => JsString(s)))
+    }
+  }
+
+  object Instance {
+    def fromJSON(json:JsValue):Instance = json match {
+      case JsArray(Seq(JsString(surface), JsNumber(morphId), JsObject(attr))) =>
+        Instance(surface, morphId.toInt, attr.mapValues(_.as[String]).toMap)
+      case JsArray(Seq(JsString(surface), JsNumber(morphId))) =>
+        Instance(surface, morphId.toInt, Map.empty)
+    }
+
+  }
 
   /**
     * 形態素と一致判定を行うパターン。

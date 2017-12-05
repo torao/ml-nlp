@@ -167,19 +167,19 @@ package object db {
   }
 
   implicit object _IntKeyType extends _KeyType[Int] {
-    override val typeName:String = "integer"
+    override val typeName:String = "INTEGER"
 
     def get(rs:ResultSet, i:Int):Int = rs.getInt(i)
   }
 
   implicit object _LongKeyType extends _KeyType[Long] {
-    override val typeName:String = "bigint"
+    override val typeName:String = "BIGINT"
 
     def get(rs:ResultSet, i:Int):Long = rs.getLong(i)
   }
 
   implicit object _StringKeyType extends _KeyType[String] {
-    override val typeName:String = "varchar"
+    override val typeName:String = "VARCHAR"
 
     def get(rs:ResultSet, i:Int):String = rs.getString(i)
 
@@ -210,7 +210,7 @@ package object db {
   }
 
   trait _ValueTypeForStringColumn[T] extends _ValueType[T] {
-    val typeName:String = "clob"
+    val typeName:String = "TEXT"
 
     def toStore(value:T):Object = to(value)
 
@@ -226,7 +226,7 @@ package object db {
   }
 
   trait _ValueTypeForBinaryColumn[T] extends _ValueType[T] {
-    val typeName:String = "blob"
+    val typeName:String = "BYTEA"
 
     def toStore(value:T):Object = to(value)
 

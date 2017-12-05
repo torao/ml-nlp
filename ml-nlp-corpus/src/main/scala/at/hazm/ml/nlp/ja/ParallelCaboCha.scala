@@ -1,7 +1,8 @@
 package at.hazm.ml.nlp.ja
 
 import at.hazm.core.util.ResourcePool
-import at.hazm.ml.nlp.{Corpus, Paragraph}
+import at.hazm.ml.nlp.ja.CaboCha.Token
+import at.hazm.ml.nlp.model.{RelativeDocument, RelativeSentence}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -22,13 +23,14 @@ class ParallelCaboCha(parallel:Int, cmd:String = "cabocha") extends AutoCloseabl
   /**
     * 指定されたドキュメントを解析しパラグラフを作成します。並列実行数を超過している場合、呼び出しはブロックされます。
     *
-    * @param id     ドキュメントID
-    * @param text   ドキュメントのテキスト
-    * @param corpus コーパス
+    * @param id   ドキュメントID
+    * @param text ドキュメントのテキスト
     * @return 解析結果のパラグラフ
     */
-  def parse(id:Int, text:String, corpus:Corpus)(implicit _context:ExecutionContext):Future[Paragraph] = pool.acquireAndRun { cabocha =>
-    cabocha.parse(id, text, corpus)
+  def tokenize(id:Int, text:String)(implicit _context:ExecutionContext):Future[RelativeDocument[Token]] = {
+    pool.acquireAndRun { cabocha =>
+      cabocha.tokenize(id, text)
+    }
   }
 
   /**

@@ -2,6 +2,8 @@ package at.hazm.ml.nlp
 
 import java.text.Normalizer
 
+import at.hazm.ml.nlp.model.Morph
+
 package object ja {
 
   /**
@@ -33,7 +35,7 @@ package object ja {
     if(i + 1 == tokens.length) Some(tokens(i)) else {
       val (p0, p1) = (tokens(i), tokens(i + 1))
       if((p0.pos1 == "動詞" || p0.pos1 == "形容詞") && neg(p1)) {
-        Some(p0.copy(surface = s"${p0.surface}ない", baseForm = s"${p0.baseForm}ない"))
+        Some(p0.copy(surface = s"${p0.surface}ない"))
       } else if(neg(p0)) {
         None
       } else Some(p0)

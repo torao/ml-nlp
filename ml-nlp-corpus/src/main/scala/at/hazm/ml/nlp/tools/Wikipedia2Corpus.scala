@@ -19,7 +19,7 @@ object Wikipedia2Corpus {
   private[Wikipedia2Corpus] val logger = LoggerFactory.getLogger(getClass.getName.dropRight(1))
 
   def transform(corpus:Corpus, id:Int, content:String):RelativeDocument[Morph.Instance] = using(new CaboCha()) { cabocha =>
-    retrieve(corpus, cabocha.tokenize(id, content))
+    retrieve(corpus, cabocha.tokenize(id, Text.normalize(content)))
   }
 
   /**

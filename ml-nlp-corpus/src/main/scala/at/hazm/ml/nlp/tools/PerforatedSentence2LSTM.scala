@@ -36,25 +36,15 @@ object PerforatedSentence2LSTM {
   val DefaultSentenceSize:Int = 10000
   val DefaultMaxSentencesPerDoc:Int = 1000
 
-  /*
-  def exec(src:File, modelFile:File):Unit = {
-    val sampleSentenceSize = 10000
-    val maxSentencesPerDoc = 100
-    //makeCorpus(src)
-    val model = calculate(modelFile, sampleSentenceSize, maxSentencesPerDoc)
-    predict(model, sampleSentenceSize, maxSentencesPerDoc, 5)
-  }
-  */
-
   def predict(corpus:Corpus, doc:PerforatedDocument, model:MultiLayerNetwork, predictCount:Int, sampleSentenceSize:Int = DefaultSentenceSize, maxSentencesPerDoc:Int = DefaultMaxSentencesPerDoc):Seq[Int] = {
 
     //Create input for initialization
-    val inputSentences = doc.sentences.flatten
+    val inputSentences = doc.sentences
     val numSamples = inputSentences.length
     val initializationInput = Nd4j.zeros(numSamples, sampleSentenceSize, maxSentencesPerDoc)
 
-    inputSentences.zipWithIndex.foreach { case (sentence, i) =>
-      initializationInput.putScalar(Array(0, sentence, i), 1.0f)
+    for((sentence, i) <- inputSentences.zipWithIndex; (s, j) <- sentence.zipWithIndex){
+      initializationInput.putScalar(Array(i, s, j), 1.0f)
     }
 
     //Sample from network (and feed samples back into input) one character at a time (for all samples)

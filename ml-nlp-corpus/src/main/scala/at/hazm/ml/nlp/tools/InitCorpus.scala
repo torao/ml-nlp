@@ -20,7 +20,7 @@ object InitCorpus {
   private[this] val logger = LoggerFactory.getLogger(getClass.getName.dropRight(1))
 
   def main(args:Array[String]):Unit = {
-    val threads = ManagementFactory.getOperatingSystemMXBean.getAvailableProcessors
+    val threads = ManagementFactory.getOperatingSystemMXBean.getAvailableProcessors - 2
     val executor = Executors.newFixedThreadPool(threads)
     implicit val _context:ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
 
@@ -41,16 +41,20 @@ object InitCorpus {
         System.out.print(">> ")
         val text = in.readLine()
         if(text != null && !text.equalsIgnoreCase("quit")) {
-          try {
-            val doc = Paragraph2PerforatedSentence.transform(corpus, Wikipedia2Corpus.transform(corpus, -1, text.toString))
-            PerforatedSentence2LSTM.predict(corpus, doc, lstm, 10).map { perforatedId =>
-              val sentence = corpus.perforatedSentences.apply(perforatedId)
-              sentence.mkString(corpus)
-            }.foreach(s => println(s"<< $s"))
-            buffer.append(text)
-          } catch {
-            case ex:Throwable =>
-              ex.printStackTrace()
+          if(text.trim().nonEmpty){
+            try {
+              val doc = Paragraph2PerforatedSentence.transform(corpus, Wikipedia2Corpus.transform(corpus, -1, text))
+              if(doc.sentences.nonEmpty){
+                PerforatedSentence2LSTM.predict(corpus, doc, lstm, 10).map { perforatedId =>
+                  val sentence = corpus.perforatedSentences.apply(perforatedId)
+                  sentence.mkString(corpus)
+                }.foreach(s => println(s"<< $s"))
+                buffer.append(text)
+              } else println("<< 認識できる文が含まれていませんでした。")
+            } catch {
+              case ex:Throwable =>
+                ex.printStackTrace()
+            }
           }
           _loop()
         }

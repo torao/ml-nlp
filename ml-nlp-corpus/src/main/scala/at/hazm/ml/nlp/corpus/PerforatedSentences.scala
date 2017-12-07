@@ -6,10 +6,10 @@ import at.hazm.core.db._
 import at.hazm.ml.nlp.Corpus
 import at.hazm.ml.nlp.model.PerforatedSentence._
 import at.hazm.ml.nlp.model.{Morph, PerforatedDocument, PerforatedSentence, RelativeDocument}
+import org.slf4j.LoggerFactory
 import play.api.libs.json.{JsArray, JsNumber, Json}
 
 import scala.collection.mutable
-import scala.util.Try
 
 /**
   * 形態素解析された文を係り受け関係から最短化し、名詞、動詞、形容詞を分離した文を保持します。
@@ -36,7 +36,7 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
   /**
     * 最短化された文の定義を保持するための KVS。
     */
-  private[this] val shortenedSentences = new db.Index[PerforatedSentence](perforatedTable, "perforated_id", "morphs", unique = true)(_PerforatedSentenceType)
+  private[this] val shortenedSentences = new db.Index[Seq[Token]](perforatedTable, "perforated_id", "morphs", unique = true)(_PerforatedTokensType)
 
   /**
     * 最短化された文が実際に存在する文章を保持するための KVS。
@@ -60,7 +60,8 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
   def toDocumentCursor:Cursor[(Int, PerforatedDocument)] = shortenedInstances.toCursor
 
   def apply(id:Int):PerforatedSentence = {
-    shortenedSentences(id)
+    val tokens = shortenedSentences(id)
+    PerforatedSentence(id, tokens)
   }
 
   /**
@@ -70,10 +71,10 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
     */
   def register(doc:RelativeDocument[Morph.Instance]):PerforatedDocument = {
     val sentences = perforate(corpus, doc).map { case (sentenceNum, perforated) =>
-      perforated.map { case (sentence, args) =>
+      perforated.map { case (tokens, args) =>
 
         // 最短文の登録
-        val perforatedId = shortenedSentences.register(sentence)
+        val perforatedId = shortenedSentences.register(tokens)
 
         // プレースホルダー部分に入る形態素の登録
         if(args.nonEmpty) {
@@ -92,27 +93,28 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
   def transform(doc:RelativeDocument[Morph.Instance]):PerforatedDocument = {
     val error = mutable.Buffer[String]()
     val sentences = perforate(corpus, doc).map { case (_, perforated) =>
-      perforated.map { case (sentence, _) =>
-        val perforatedId = shortenedSentences.indexOf(sentence)
+      perforated.map { case (tokens, _) =>
+        val perforatedId = shortenedSentences.indexOf(tokens)
         if(perforatedId < 0) {
-          error.append(sentence.tokens.map {
+          error.append("undefined sentence: " + tokens.map {
             case MorphId(morphId) =>
               corpus.vocabulary(morphId).surface
             case p:Placeholder => s"[${p.pos.symbol}]"
           }.mkString("."))
         }
         perforatedId
-      }
+      }.filter(_ >= 0)
     }
 
+    // 発生したエラーをまとめてログ出力
     if(error.nonEmpty) {
-      throw new NoSuchElementException(error.mkString("[", "][", "]"))
+      error.foreach(msg => logger.warn(msg))
     }
 
     PerforatedDocument(doc.id, sentences)
   }
 
-  private[this] def perforate(corpus:Corpus, doc:RelativeDocument[Morph.Instance]):Seq[(Int, Seq[(PerforatedSentence, Map[Placeholder, Int])])] = {
+  private[this] def perforate(corpus:Corpus, doc:RelativeDocument[Morph.Instance]):Seq[(Int, Seq[(Seq[Token], Map[Placeholder, Int])])] = {
     val morphs = corpus.vocabulary.getAll(doc.tokens.map(_.morphId).distinct)
 
     doc.sentences.zipWithIndex.map { case (sentence, sentenceNum) =>
@@ -120,12 +122,12 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
       (sentenceNum, sentence
         .breakdown()
         .map(s => s.flatten.tokens.map(m => (m.morphId, morphs(m.morphId))))
-        .map(s => optimize(-1, s))
-        .filter(_._1.tokens.nonEmpty))
+        .map(s => optimize(s))
+        .filter(_._1.nonEmpty))
     }
   }
 
-  private[this] def optimize(id:Int, sentence:Seq[(Int, Morph)]):(PerforatedSentence, Map[Placeholder, Int]) = {
+  private[this] def optimize(sentence:Seq[(Int, Morph)]):(Seq[Token], Map[Placeholder, Int]) = {
     val tokens = mutable.Buffer[PerforatedSentence.Token]()
     val args = mutable.HashMap[Placeholder, Int]()
     var prePOS = ""
@@ -144,7 +146,7 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
         prePOS = m.pos1
       }
     }
-    (PerforatedSentence(id, tokens), args.toMap)
+    (tokens, args.toMap)
   }
 
 
@@ -194,36 +196,24 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
 }
 
 object PerforatedSentences {
+  private[PerforatedSentences] val logger = LoggerFactory.getLogger(classOf[PerforatedSentence])
 
-  implicit object _PerforatedSentenceType extends _ValueType[PerforatedSentence] {
+  implicit object _PerforatedTokensType extends _ValueType[Seq[Token]] {
     override val typeName:String = "TEXT"
 
-    override def toStore(value:PerforatedSentence):String = value.tokens.map {
-      case MorphId(id) => id.toString
-      case Placeholder(num, pos) => s"${pos.symbol}$num"
-    }.mkString(" ")
+    override def toStore(value:Seq[Token]):String = value.map(_.toString).mkString(" ")
 
-    override def get(key:Any, rs:ResultSet, i:Int):PerforatedSentence = {
+    override def get(key:Any, rs:ResultSet, i:Int):Seq[Token] = {
       val value = rs.getString(i)
-      val tokens:Seq[Token] = value.split("\\s+").filter(_.nonEmpty).map {
-        case morphId if Try(morphId.toInt).isSuccess =>
-          MorphId(morphId.toInt)
-        case placeholder if Try(placeholder.drop(1).toInt).isSuccess =>
-          Placeholder(placeholder.drop(1).toInt, POS.valueOf(placeholder.head))
-        case unexpected =>
-          throw new IllegalStateException(s"unexpected perforated token: $unexpected ($value)")
+      value.split("\\s+").filter(_.nonEmpty).map {
+        case morphId if Character.isDigit(morphId.head) => MorphId.fromString(morphId)
+        case placeholder => Placeholder.fromString(placeholder)
       }.toSeq
-      val id = key match {
-        case i:Int => i
-        case s:String => s.toInt
-        case _ => -1
-      }
-      PerforatedSentence(id, tokens)
     }
 
-    override def hash(value:PerforatedSentence):Int = value.id
+    override def hash(value:Seq[Token]):Int = value.map(_.hashCode()).sum
 
-    override def equals(value1:PerforatedSentence, value2:PerforatedSentence):Boolean = value1.id == value2.id
+    override def equals(value1:Seq[Token], value2:Seq[Token]):Boolean = value1.zip(value2).forall { case (a, b) => a == b }
   }
 
   implicit object _PerforatedDocumentType extends _ValueType[PerforatedDocument] {

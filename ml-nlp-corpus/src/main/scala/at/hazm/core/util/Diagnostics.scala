@@ -103,7 +103,7 @@ object Diagnostics {
       *
       * @param message 状況メッセージ
       */
-    def report(message:String):Unit = _report(_current.incrementAndGet(), message)
+    def report(message:String):Unit = synchronized(_report(_current.incrementAndGet(), message))
 
     /**
       * 指定された進捗値を現在の進捗として状況メッセージをレポートします。
@@ -111,9 +111,7 @@ object Diagnostics {
       * @param current 進捗
       * @param message 状況メッセージ
       */
-    def report(current:Long, message:String):Unit = {
-      _report(current, message)
-    }
+    def report(current:Long, message:String):Unit = _report(current, message)
 
     def report():Unit = report("")
 

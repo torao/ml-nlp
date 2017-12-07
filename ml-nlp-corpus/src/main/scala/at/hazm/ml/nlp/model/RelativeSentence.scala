@@ -48,7 +48,7 @@ case class RelativeSentence[T <: Token](clauses:Seq[RelativeClause[T]]) extends 
   }
 
   /**
-    * 係り受けや文節などの構造を持たない文に変換します。
+    * この文を係り受けや文節などの構造を持たない文に変換します。
     *
     * @return 単純化された文
     */

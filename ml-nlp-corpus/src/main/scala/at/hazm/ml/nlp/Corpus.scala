@@ -69,6 +69,9 @@ object Corpus {
       RelativeDocument.fromJSON(Json.parse(json))
     }
 
+    /**
+      * 内容から ID を逆引きする操作は ID で同一性が決定するため ID をハッシュとする。
+      */
     def hash(value:STORE_DOC):Int = value.id
 
     def equals(value1:STORE_DOC, value2:STORE_DOC):Boolean = value1.id == value2.id

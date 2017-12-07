@@ -161,7 +161,7 @@ object Diagnostics {
         }
 
         val t = estimateEndTime()
-        if(t < 0) {
+        if(t < tm) {
           s"終了予想時間計測中"
         } else {
           s"残り ${intervalString(t - tm)}"

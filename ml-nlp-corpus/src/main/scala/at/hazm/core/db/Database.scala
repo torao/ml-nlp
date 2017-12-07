@@ -2,7 +2,7 @@ package at.hazm.core.db
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.sql.Connection
+import java.sql.{Connection, SQLException}
 
 import at.hazm.core.io.using
 import org.apache.tomcat.jdbc.pool.{DataSource, PoolProperties}
@@ -53,9 +53,9 @@ class Database(val url:String, val username:String, val password:String, driver:
     */
   override def close():Unit = ds.close()
 
-  def trx[T](f:(Connection) => T):T = using(newConnection){ con =>
+  def trx[T](f:(Connection) => T):T = using(newConnection) { con =>
     val result = f(con)
-    if(!con.getAutoCommit){
+    if(!con.getAutoCommit) {
       con.commit()
     }
     result
@@ -73,33 +73,38 @@ class Database(val url:String, val username:String, val password:String, driver:
     * @param keyType KVS のキーに対する型クラス
     * @tparam K KVS のキーの型
     */
-  class KVS[K, V](table:String)(implicit keyType:_KeyType[K], valueType:_ValueType[V]) extends IndexedStore[K, V](this, table)(keyType, valueType) {
+  class KVS[K, V](table:String, keyColumn:String = "key", valueColumn:String = "value")(implicit keyType:_KeyType[K], valueType:_ValueType[V]) extends IndexedStore[K, V](this, table, keyColumn, valueColumn)(keyType, valueType) {
     def set(key:K, value:V):Unit = insertOrUpdate(key, value)
   }
 
-  class Index[V](table:String, unique:Boolean)(implicit valueType:_ValueType[V]) extends IndexedStore[Int, V](this, table)(_IntKeyType, valueType) {
+  class Index[V](table:String, keyColumn:String = "key", valueColumn:String = "value", unique:Boolean = false)(implicit valueType:_ValueType[V]) extends IndexedStore[Int, V](this, table, keyColumn, valueColumn)(_IntKeyType, valueType) {
 
     def register(value:V):Int = db.trx { con =>
-      con.setAutoCommit(false)
-      con.commit()
-      con.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ)
       val hash = valueType.hash(value)
 
-      def append():Int = {
+      def append():Int = synchronized {
         val vs = valueType.toStore(value)
-        val key = con.head(s"SELECT COUNT(*) FROM $table")(_.getInt(1))
-        con.exec(s"INSERT INTO $table(key, hash, value) VALUES(?, ?, ?)", key, hash, vs)
+        val key = con.headOption(s"SELECT MAX($keyColumn) FROM $table")(_.getInt(1) + 1).getOrElse(0)
+        con.exec(s"INSERT INTO $table($keyColumn, hash, $valueColumn) VALUES(?, ?, ?)", key, hash, vs)
         key
       }
 
-      val key = if(unique) {
-        con.query(s"SELECT key, value FROM $table WHERE hash=?", hash)(r => (r.getInt(1), valueType.get(r, 2))).toList.find(r => valueType.equals(r._2, value)) match {
-          case Some((existingKey, _)) => existingKey
-          case None => append()
-        }
-      } else append()
-      con.commit()
-      key
+      def retryLoop():Int = try {
+        if(unique) {
+          con.query(s"SELECT $keyColumn, $valueColumn FROM $table WHERE hash=?", hash) { r =>
+            val key = r.getInt(1)
+            (key, valueType.get(key, r, 2))
+          }.toList.find(r => valueType.equals(r._2, value)) match {
+            case Some((existingKey, _)) => existingKey
+            case None => append()
+          }
+        } else append()
+      } catch {
+        case ex:SQLException if ex.getSQLState == "23505" =>
+          retryLoop()
+      }
+
+      retryLoop()
     }
 
     def indexOf(value:V):Int = getIds(value).headOption.getOrElse(-1)

@@ -16,23 +16,21 @@ class Vocabulary private[nlp](val db:Database, table:String) {
   /** ID 設定用のシーケンス */
   private[this] val sequence = new AtomicInteger()
 
-  val features = new db.KVS[Int,Seq[Double]](s"${table}_features")
+  val features = new db.KVS[Int, Seq[Double]](s"${table}_features")
 
   db.trx { con =>
     // コーパステーブルの作成
     con.createTable(
       s"""$table(id INTEGER NOT NULL PRIMARY KEY, hash INTEGER NOT NULL, surface VARCHAR(30) NOT NULL,
-         |pos1 VARCHAR(15) NOT NULL, pos2 VARCHAR(15) NOT NULL, pos3 VARCHAR(15) NOT NULL, pos4 VARCHAR(15) NOT NULL,
-         |conj_type VARCHAR(30) NOT NULL, conj_form VARCHAR(30) NOT NULL,
-         |reading VARCHAR(60) NOT NULL, pronunciation VARCHAR(60) NOT NULL)""".stripMargin)
-    con.exec(s"CREATE UNIQUE INDEX IF NOT EXISTS ${table}_key ON $table(surface, pos1, pos2, pos3, pos4)")
-    con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_surface ON $table(surface)")
-    con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_pos1 ON $table(pos1)")
-    con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_pos2 ON $table(pos2)")
-    con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_pos3 ON $table(pos3)")
-    con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_pos4 ON $table(pos4)")
-    con.exec(s"CREATE INDEX IF NOT EXISTS ${table}_hash ON $table(hash)")
-    this.sequence.set(con.head(s"select count(*) from $table")(_.getInt(1)))
+         |pos1 VARCHAR(15) NOT NULL, pos2 VARCHAR(15) NOT NULL, pos3 VARCHAR(15) NOT NULL, pos4 VARCHAR(15) NOT NULL)""".stripMargin)
+    con.createIndex(s"$table(surface, pos1, pos2, pos3, pos4)", unique = true)
+    con.createIndex(s"$table(surface)")
+    con.createIndex(s"$table(pos1)")
+    con.createIndex(s"$table(pos2)")
+    con.createIndex(s"$table(pos3)")
+    con.createIndex(s"$table(pos4)")
+    con.createIndex(s"$table(hash)")
+    this.sequence.set(con.head(s"SELECT COUNT(*) FROM $table")(_.getInt(1)))
 
     // 構築時にコーパスの整合性を確認 (H2 Database は OR でつなげると異様に遅い)
     val invalidIds = con.query(s"SELECT id FROM $table WHERE id < 0")(_.getInt(1)).toList :::
@@ -49,6 +47,17 @@ class Vocabulary private[nlp](val db:Database, table:String) {
     * @return ボキャブラリの形態素数
     */
   def size:Int = sequence.get()
+
+  /**
+    * 指定された ID を持つ形態素を参照します。
+    *
+    * @param id 形態素のID
+    * @return 形態素
+    */
+  def apply(id:Int):Morph = get(id) match {
+    case Some(morph) => morph
+    case None => throw new NoSuchElementException(id.toString)
+  }
 
   /**
     * 指定された ID を持つ形態素を参照します。
@@ -86,9 +95,10 @@ class Vocabulary private[nlp](val db:Database, table:String) {
   }
 
   /**
-    * 指定された形態素がボキャブラるに登録されている場合、その ID (インデックス) を参照します。返値は引数 `morphs` と同じ順序に並んだ
+    * 指定された形態素がボキャブラリに登録されている場合、その ID (インデックス) を参照します。返値は引数 `morphs` と同じ順序に並んだ
     * それぞれの ID です。未登録の形態素を検出した場合は負の値に置き換えられます。
     * 形態素は表現 (surface) と品詞 (pos) が一致している場合に同一とみなされます。
+    * 登録されていない形態素を検出した場合は負の値に置き換えられます。
     *
     * @param morphs ID を参照する形態素
     * @return `morphs` と同じ順序に並んだインデックス
@@ -142,11 +152,7 @@ class Vocabulary private[nlp](val db:Database, table:String) {
     pos1 = rs.getString("pos1"),
     pos2 = rs.getString("pos2"),
     pos3 = rs.getString("pos3"),
-    pos4 = rs.getString("pos4"),
-    conjugationType = rs.getString("conj_type"),
-    conjugationForm = rs.getString("conj_form"),
-    reading = rs.getString("reading"),
-    pronunciation = rs.getString("pronunciation")
+    pos4 = rs.getString("pos4")
   )
 
   /**
@@ -181,12 +187,12 @@ class Vocabulary private[nlp](val db:Database, table:String) {
     if(newbies.nonEmpty) {
       db.trx { con =>
         newbies.grouped(50).foreach { ms =>
-          val values = ms.map(_ => "(?,?,?,?,?,?,?,?,?,?,?)").mkString(",")
+          val values = ms.map(_ => "(?,?,?,?,?,?,?)").mkString(",")
           val params = ms.flatMap { case (_, id, m) =>
             val hash = Database.makeHash(m.key)
-            Seq(id, hash, m.surface, m.pos1, m.pos2, m.pos3, m.pos4, m.conjugationType, m.conjugationForm, m.reading, m.pronunciation)
+            Seq(id, hash, m.surface, m.pos1, m.pos2, m.pos3, m.pos4)
           }
-          con.exec(s"INSERT INTO $table(id,hash,surface,pos1,pos2,pos3,pos4,conj_type,conj_form,reading,pronunciation) VALUES$values", params:_*)
+          con.exec(s"INSERT INTO $table(id,hash,surface,pos1,pos2,pos3,pos4) VALUES$values", params:_*)
         }
       }
     }

@@ -37,11 +37,13 @@ object Lang {
     val brain = new Brain(new File(args(0)))
     System.out.println(brain.db.trx(_.head("SELECT CURRENT_TIMESTAMP")(_.getTimestamp(1))))
 
+    /*
     using(new CaboCha()){ cabocha =>
       wikipedia(src) :> { case (id:Int, doc:String) =>
           cabocha.parse()
       }
     }
+    */
   }
 
   /**

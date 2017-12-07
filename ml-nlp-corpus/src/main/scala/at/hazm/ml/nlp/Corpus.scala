@@ -65,7 +65,7 @@ object Corpus {
       baos.toByteArray
     }
 
-    def get(rs:ResultSet, i:Int):STORE_DOC = {
+    def get(key:Any, rs:ResultSet, i:Int):STORE_DOC = {
       val bytes = rs.getBytes(i)
       val bais = new ByteArrayInputStream(bytes)
       val json = using(new InputStreamReader(new BZip2CompressorInputStream(bais), StandardCharsets.UTF_8)) { in =>

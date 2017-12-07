@@ -116,7 +116,21 @@ package object db {
 
     def createTable(sql:String):Boolean = exec(s"CREATE TABLE IF NOT EXISTS $sql") > 0
 
-    def createIndex(sql:String, unique:Boolean = false):Boolean = exec(s"CREATE ${if(unique) "UNIQUE " else ""}INDEX IF NOT EXISTS $sql") > 0
+    def createIndex(sql:String, unique:Boolean = false):Boolean = {
+      def _norm(name:String) = {
+        val Max = 63 - 4
+        (if(name.length > Max) name.substring(0, Max) else name) + "_idx"
+      }
+
+      val pattern = """([a-zA-Z0-9\-_]+\.)?([a-zA-Z0-9\-_]+)\((.*)\)""".r
+      val name = sql match {
+        case pattern(_, table, param) =>
+          _norm(table + "_" + param.split("\\s*,\\s*").filter(_.nonEmpty).mkString("_"))
+        case unknown =>
+          _norm(unknown.split("[^a-zA-Z0-9\\-_]+").filter(_.nonEmpty).mkString("_"))
+      }
+      exec(s"CREATE ${if(unique) "UNIQUE " else ""}INDEX IF NOT EXISTS $name ON $sql") > 0
+    }
   }
 
   class Cursor[T] private[db](converter:(ResultSet) => T, rs:ResultSet, r:AutoCloseable*) extends Iterator[T] with AutoCloseable {
@@ -199,7 +213,7 @@ package object db {
 
     def toStore(value:T):Object
 
-    def get(rs:ResultSet, i:Int):T
+    def get(key:Any, rs:ResultSet, i:Int):T
 
     def hash(value:T):Int
 
@@ -214,7 +228,7 @@ package object db {
 
     def toStore(value:T):Object = to(value)
 
-    def get(rs:ResultSet, i:Int):T = from(rs.getString(i))
+    def get(key:Any, rs:ResultSet, i:Int):T = from(rs.getString(i))
 
     def hash(value:T):Int = makeHash(to(value))
 
@@ -230,7 +244,7 @@ package object db {
 
     def toStore(value:T):Object = to(value)
 
-    def get(rs:ResultSet, i:Int):T = from(rs.getBytes(i))
+    def get(key:Any, rs:ResultSet, i:Int):T = from(rs.getBytes(i))
 
     def hash(value:T):Int = makeHash(to(value))
 

@@ -14,19 +14,14 @@ import scala.collection.mutable
   * 形態素を現すクラスです。
   * IPADIC をベースとした形態素解析と同等のプロパティを持ちます。
   *
-  * @param surface         表現の基本形
-  * @param pos1            品詞レベル 1 (名詞, 助詞, 動詞, 感嘆詞, etc.)
-  * @param pos2            品詞レベル 2 (一般, 連体化, 係助詞, 自立, etc.)
-  * @param pos3            品詞レベル 3 (組織, 一般, etc.)
-  * @param pos4            品詞レベル 4
-  * @param conjugationType 活用型
-  * @param conjugationForm 活用形
-  * @param reading         読み
-  * @param pronunciation   発音
+  * @param surface 表現の基本形
+  * @param pos1    品詞レベル 1 (名詞, 助詞, 動詞, 感嘆詞, etc.)
+  * @param pos2    品詞レベル 2 (一般, 連体化, 係助詞, 自立, etc.)
+  * @param pos3    品詞レベル 3 (組織, 一般, etc.)
+  * @param pos4    品詞レベル 4
   * @see https://github.com/atilika/kuromoji/blob/master/kuromoji-ipadic/src/main/java/com/atilika/kuromoji/ipadic/Token.java
   */
-case class Morph(surface:String, pos1:String, pos2:String, pos3:String, pos4:String,
-                 conjugationType:String, conjugationForm:String, reading:String, pronunciation:String) extends AbstractMorph {
+case class Morph(surface:String, pos1:String, pos2:String, pos3:String, pos4:String) extends AbstractMorph {
 
   /**
     * 形態素の同一性を比較するためのキーを参照します。このキーが一致する形態素は同一とみなすことができます。
@@ -40,14 +35,7 @@ case class Morph(surface:String, pos1:String, pos2:String, pos3:String, pos4:Str
     *
     * @return JSON 表現
     */
-  def toJSON:JsValue = Json.obj(
-    "surface" -> surface,
-    "pos" -> Json.arr(pos1, pos2, pos3, pos4),
-    "conj-type" -> conjugationType,
-    "conj-form" -> conjugationForm,
-    "reading" -> reading,
-    "pronunciation" -> pronunciation
-  )
+  def toJSON:JsValue = Json.arr(surface, Json.arr(pos1, pos2, pos3, pos4))
 }
 
 object Morph {
@@ -58,17 +46,12 @@ object Morph {
     * @param json 形態素を復元する JSON
     * @return 復元した形態素
     */
-  def fromJSON(json:JsValue):Morph = Morph(
-    surface = (json \ "surface").as[String],
-    pos1 = (json \ "pos").apply(0).as[String],
-    pos2 = (json \ "pos").apply(1).as[String],
-    pos3 = (json \ "pos").apply(2).as[String],
-    pos4 = (json \ "pos").apply(3).as[String],
-    conjugationType = (json \ "conj-type").as[String],
-    conjugationForm = (json \ "conj-form").as[String],
-    reading = (json \ "reading").as[String],
-    pronunciation = (json \ "pronunciation").as[String]
-  )
+  def fromJSON(json:JsValue):Morph = json match {
+    case JsArray(Seq(JsString(surface), JsArray(Seq(JsString(pos1), JsString(pos2), JsString(pos3), JsString(pos4))))) =>
+      Morph(surface, pos1, pos2, pos3, pos4)
+    case unsupported =>
+      throw new IllegalArgumentException(s"unsupported morph form: ${Json.stringify(unsupported)}")
+  }
 
   /**
     * 形態素を表すクラスです。
@@ -92,18 +75,6 @@ object Morph {
     /** 品詞レベル 4 */
     def pos4:String
 
-    /** 活用型 */
-    def conjugationType:String
-
-    /** 活用形 */
-    def conjugationForm:String
-
-    /** 読み */
-    def reading:String
-
-    /** 発音 */
-    def pronunciation:String
-
     /**
       * この形態素の品詞をハイフンで連結した文字列です。
       */
@@ -121,11 +92,15 @@ object Morph {
   /**
     * 文章中に存在する形態素のインスタンスです。実際に文章中での表現とその属性を持ちます。
     *
-    * @param surface 形態素のインスタンス表現
-    * @param morphId 形態素ID
-    * @param attr    属性
+    * @param morphId         形態素ID
+    * @param surface         形態素のインスタンス表現
+    * @param conjugationType 活用型
+    * @param conjugationForm 活用形
+    * @param reading         読み
+    * @param pronunciation   発音
+    * @param attr            属性
     */
-  case class Instance(surface:String, morphId:Int, attr:Map[String, String]) extends Token {
+  case class Instance(morphId:Int, surface:String, conjugationType:String, conjugationForm:String, reading:String, pronunciation:String, attr:Map[String, String]) extends Token {
     /** このシーケンスの形態素を参照します。 */
     def morphs:Seq[Instance] = Seq(this)
 
@@ -133,19 +108,20 @@ object Morph {
       * この形態素インスタンスを JSON で表現します。
       */
     def toJSON:JsValue = {
-      val base = Json.arr(surface, morphId)
+      val base = Json.arr(morphId, surface, conjugationType, conjugationForm, reading, pronunciation)
       if(attr.isEmpty) base else base :+ JsObject(attr.mapValues(s => JsString(s)))
     }
   }
 
   object Instance {
     def fromJSON(json:JsValue):Instance = json match {
-      case JsArray(Seq(JsString(surface), JsNumber(morphId), JsObject(attr))) =>
-        Instance(surface, morphId.toInt, attr.mapValues(_.as[String]).toMap)
-      case JsArray(Seq(JsString(surface), JsNumber(morphId))) =>
-        Instance(surface, morphId.toInt, Map.empty)
+      case JsArray(Seq(JsNumber(morphId), JsString(surface), JsString(conjugationType), JsString(conjugationForm), JsString(reading), JsString(pronunciation), JsObject(attr))) =>
+        Instance(morphId.toInt, surface, conjugationType, conjugationForm, reading, pronunciation, attr.mapValues(_.as[String]).toMap)
+      case JsArray(Seq(JsNumber(morphId), JsString(surface), JsString(conjugationType), JsString(conjugationForm), JsString(reading), JsString(pronunciation))) =>
+        Instance(morphId.toInt, surface, conjugationType, conjugationForm, reading, pronunciation, Map.empty)
+      case unsupported =>
+        throw new IllegalArgumentException(s"unsupported morph instance form: ${Json.stringify(unsupported)}")
     }
-
   }
 
   /**

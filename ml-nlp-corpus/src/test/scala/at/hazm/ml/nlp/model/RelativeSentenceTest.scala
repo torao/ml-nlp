@@ -16,11 +16,11 @@ class RelativeSentenceTest extends Specification {
 
   def e0:Result = {
     val results:Seq[Result] = RelativeSentence(Seq(
-      RelativeClause(0, 1, "D", 1.0, 0, 0, Seq(Morph.Instance("A", 0, Map.empty))),
-      RelativeClause(1, 4, "D", 1.0, 0, 0, Seq(Morph.Instance("B", 1, Map.empty))),
-      RelativeClause(2, 3, "D", 1.0, 0, 0, Seq(Morph.Instance("C", 2, Map.empty))),
-      RelativeClause(3, 4, "D", 1.0, 0, 0, Seq(Morph.Instance("D", 3, Map.empty))),
-      RelativeClause(4, -1, "D", 1.0, 0, 0, Seq(Morph.Instance("E", 4, Map.empty)))
+      RelativeClause(0, 1, "D", 1.0, 0, 0, Seq(Morph.Instance(0, "A", "", "", "", "", Map.empty))),
+      RelativeClause(1, 4, "D", 1.0, 0, 0, Seq(Morph.Instance(1, "B", "", "", "", "", Map.empty))),
+      RelativeClause(2, 3, "D", 1.0, 0, 0, Seq(Morph.Instance(2, "C", "", "", "", "", Map.empty))),
+      RelativeClause(3, 4, "D", 1.0, 0, 0, Seq(Morph.Instance(3, "D", "", "", "", "", Map.empty))),
+      RelativeClause(4, -1, "D", 1.0, 0, 0, Seq(Morph.Instance(4, "E", "", "", "", "", Map.empty)))
     )).breakdown().map { sentence =>
       sentence.tokens.map(_.morphId).toList match {
         case 0 :: 1 :: 4 :: Nil => success

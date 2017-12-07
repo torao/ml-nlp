@@ -1,6 +1,7 @@
 package at.hazm.ml.nlp
 
 import java.io.File
+import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
@@ -12,6 +13,25 @@ import at.hazm.core.io.{readBinary, using}
 import scala.annotation.tailrec
 
 package object tools {
+
+  /**
+    * 並列処理に利用可能な CPU 数。
+    */
+  val CPUs:Int = ManagementFactory.getOperatingSystemMXBean.getAvailableProcessors
+
+  /**
+    * 処理の進捗を永続的なストレージに保持するクラス。アプリケーションの再実行時に前回の続きから処理を開始したり、前回の処理を無視して
+    * 新規に再実行することを目的とする。
+    */
+  object Resume extends AutoCloseable {
+    // TODO 設計考慮中
+    val cacheFile = new File(".ml-nlp.resume")
+    lazy val db = new PortableDB(cacheFile)
+
+    def close():Unit = {
+      db.close()
+    }
+  }
 
   object cache {
     val cacheFile = new File(".ml-nlp.cache")

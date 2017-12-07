@@ -78,14 +78,17 @@ object Diagnostics {
     private[this] val _stopped = new AtomicBoolean(false)
 
     private[this] val history = mutable.Buffer[(Long, Long)]()
-    history.append((t0, init))
+    // history.append((t0, init))   // DB アクセスなど最初の1件目で時間がかかることが多いため時間予測には使わない
 
     timer.scheduleAtFixedRate(task, interval, interval)
 
-    def apply(f:(Progress) => Unit):Unit = try {
+    def apply[T](f:(Progress) => T):T = try {
       f(this)
     } catch {
-      case ex:Break => ()
+      case ex:Break =>
+        logger.warn("break detected", ex)
+        System.exit(1)
+        throw new Error()
     } finally {
       stop()
     }
@@ -138,8 +141,7 @@ object Diagnostics {
 
     def stopped:Boolean = _stopped.get
 
-    private[this] def stop():Unit = {
-      _stopped.set(true)
+    private[this] def stop():Unit = if(_stopped.compareAndSet(false, true)) {
       val server = ManagementFactory.getPlatformMBeanServer
       server.unregisterMBean(mxBeanName)
       task.cancel()
@@ -159,7 +161,7 @@ object Diagnostics {
         }
 
         val t = estimateEndTime()
-        if(t < 0) {
+        if(t < tm) {
           s"終了予想時間計測中"
         } else {
           s"残り ${intervalString(t - tm)}"

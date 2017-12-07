@@ -24,6 +24,18 @@ class ResourcePool[T](size:Int, factory:Factory[T]) extends AutoCloseable {
   size.times(pool.put(factory.acquire()))
 
   /**
+    * リソースの生成関数のみを指定するコンストラクタです。リソースの破棄やエラー処理は行いません。
+    *
+    * @param size リソースのプールサイズ
+    * @param f    リソース生成を行う関数
+    */
+  def this(size:Int)(f: => T) = this(size, new Factory[T] {
+    override def acquire():T = f
+
+    override def dispose(resource:T):Unit = None
+  })
+
+  /**
     * プールしているリソースの一つを返します。すべのリソースが使用中の場合は呼び出しがブロックされます。可能であればこのメソッドではなく
     * 仕様スコープを限定し自動で `recycle()` を行う `acquireAndRun()` を使用してください。
     *
@@ -66,7 +78,7 @@ class ResourcePool[T](size:Int, factory:Factory[T]) extends AutoCloseable {
       } catch {
         case ex:Throwable =>
           factory.dispose(r)
-          if(! closed.get()) pool.put(factory.acquire())
+          if(!closed.get()) pool.put(factory.acquire())
           throw ex
       }
     }

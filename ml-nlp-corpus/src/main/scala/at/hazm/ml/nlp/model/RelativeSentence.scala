@@ -46,6 +46,13 @@ case class RelativeSentence[T <: Token](clauses:Seq[RelativeClause[T]]) extends 
       RelativeSentence(_join(head, map))
     }
   }
+
+  /**
+    * 係り受けや文節などの構造を持たない文に変換します。
+    *
+    * @return 単純化された文
+    */
+  def flatten:Sentence[T] = Sentence(tokens)
 }
 
 

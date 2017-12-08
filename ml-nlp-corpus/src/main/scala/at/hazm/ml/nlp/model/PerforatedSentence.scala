@@ -5,14 +5,49 @@
  */
 package at.hazm.ml.nlp.model
 
-import at.hazm.ml.nlp.Corpus
+import at.hazm.ml.nlp.corpus.Vocabulary
 import at.hazm.ml.nlp.model.PerforatedSentence.{MorphId, Placeholder}
 
+/**
+  * プレースホルダ化された文を表すクラスです。
+  *
+  * @param id     テンプレート文のID
+  * @param tokens トークンのシーケンス
+  */
 case class PerforatedSentence(id:Int, tokens:Seq[PerforatedSentence.Token]) {
-  def mkString(corpus:Corpus):String = tokens.map {
-    case MorphId(morphId) => corpus.vocabulary(morphId).surface
-    case Placeholder(_, pos) => s"[${pos.symbol}]"
-  }.mkString(" ")
+
+  /**
+    * 指定されたプレースホルダとコーパスを使用してこのテンプレート文を復元します。
+    *
+    * @param placeholder プレースホルダ
+    * @param vocab       ボキャブラリ
+    * @return 復元された文
+    */
+  def restore(placeholder:Map[Placeholder, Int], vocab:Vocabulary):String = {
+    val morphs = vocab.getAll(placeholder.values.toSeq ++ tokens.collect { case MorphId(morphId) => morphId })
+    val param = placeholder.mapValues(morphId => morphs(morphId))
+    tokens.map {
+      case MorphId(morphId) => morphs(morphId).surface
+      case p:Placeholder => param(p).surface
+    }.mkString
+  }
+
+  /**
+    * 指定されたプレースホルダとコーパスを使用してこのテンプレート文をデバッグ用の文字列に変換します。restore() と違い
+    * このメソッドで生成される文字列は区切りは範囲の括弧などを含みます。
+    *
+    * @param vocab       ボキャブラリ
+    * @param placeholder プレースホルダ
+    * @return 復元された文
+    */
+  def makeString(vocab:Vocabulary, placeholder:Map[Placeholder, Int] = Map.empty):String = {
+    val morphs = vocab.getAll(placeholder.values.toSeq ++ tokens.collect { case MorphId(morphId) => morphId })
+    val param = placeholder.mapValues(morphId => morphs(morphId))
+    tokens.map {
+      case MorphId(morphId) => morphId + ":" + morphs(morphId).surface
+      case p@Placeholder(num, pos) => s"${pos.symbol}$num" + param.get(p).map(p => ":" + p.surface).getOrElse("")
+    }.map(s => s"[$s]").mkString("(" + (if(id >= 0) s"$id:" else ""), "", ")")
+  }
 }
 
 object PerforatedSentence {

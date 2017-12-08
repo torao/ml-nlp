@@ -53,6 +53,13 @@ case class RelativeSentence[T <: Token](clauses:Seq[RelativeClause[T]]) extends 
     * @return 単純化された文
     */
   def flatten:Sentence[T] = Sentence(tokens)
+
+  /**
+    * このインスタンスをデバッグ用に文字列化します。
+    *
+    * @return このインスタンスの文字列
+    */
+  override def toString:String = clauses.mkString("{", ",", "}")
 }
 
 

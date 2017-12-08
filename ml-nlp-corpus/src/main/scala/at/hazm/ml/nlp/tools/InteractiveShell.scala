@@ -29,11 +29,11 @@ object InteractiveShell {
               doc.sentences.flatten.map { sentenceId =>
                 corpus.perforatedSentences(sentenceId)
               }.foreach { sentence =>
-                System.out.println(s">> ${sentence.mkString(corpus)}")
+                System.out.println(s">> ${sentence.makeString(corpus.vocabulary)} (${sentence.tokens.mkString(" ")})")
               }
               PerforatedSentence2LSTM.predict(corpus, doc, lstm, 10).map { perforatedId =>
                 val sentence = corpus.perforatedSentences.apply(perforatedId)
-                sentence.mkString(corpus)
+                sentence.makeString(corpus.vocabulary)
               }.foreach(s => println(s"<< $s"))
               buffer.append(text)
             } else println("<< 認識できる文が含まれていませんでした。")

@@ -38,7 +38,7 @@ class Vocabulary(db:Database, namespace:String) {
     *
     * @return ボキャブラリの形態素数
     */
-  def size:Int = sequence.get()
+  //def size:Int = sequence.get()
 
   /**
     * 指定された ID を持つ形態素を参照します。
@@ -46,8 +46,10 @@ class Vocabulary(db:Database, namespace:String) {
     * @param id 形態素のID
     * @return 形態素
     */
+  /*
   def get(id:Int):Option[Morph] = db.trx { con =>
     con.headOption(s"SELECT * FROM $table WHERE idx = ?", id)(rs2Morph)
   }
+  */
 
 }

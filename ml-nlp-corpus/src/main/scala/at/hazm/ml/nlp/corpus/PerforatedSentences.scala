@@ -1,7 +1,5 @@
 package at.hazm.ml.nlp.corpus
 
-import java.sql.ResultSet
-
 import at.hazm.core.db._
 import at.hazm.ml.nlp.Corpus
 import at.hazm.ml.nlp.model.PerforatedSentence._
@@ -36,7 +34,7 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
   /**
     * 最短化された文の定義を保持するための KVS。
     */
-  private[this] val shortenedSentences = new db.Index[Seq[Token]](perforatedTable, "perforated_id", "morphs", unique = true)(_PerforatedTokensType)
+  private[this] val shortenedSentences = new db.Index[Seq[Token]](perforatedTable, "perforated_id", "morphs")(_PerforatedTokensType)
 
   /**
     * 最短化された文が実際に存在する文章を保持するための KVS。
@@ -64,7 +62,7 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
       perforated.map { case (tokens, args) =>
 
         // 最短文の登録
-        val perforatedId = shortenedSentences.register(tokens)
+        val perforatedId = shortenedSentences.add(tokens)
 
         // プレースホルダー部分に入る形態素の登録
         if(args.nonEmpty) {
@@ -81,27 +79,28 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
   }
 
   def transform(doc:RelativeDocument[Morph.Instance]):PerforatedDocument = {
-    val error = mutable.Buffer[String]()
     val sentences = perforate(corpus, doc).map { case (_, perforated) =>
-      perforated.map { case (tokens, _) =>
-        val perforatedId = shortenedSentences.indexOf(tokens)
-        if(perforatedId < 0) {
-          error.append("未定義の文が含まれています: " + tokens.map {
-            case MorphId(morphId) =>
-              corpus.vocabulary(morphId).surface
-            case p:Placeholder => s"[${p.pos.symbol}]"
-          }.mkString("."))
-        }
-        perforatedId
+      perforated.map { case (tokens, placeholders) =>
+        transform(tokens, placeholders)
       }.filter(_ >= 0)
     }
-
-    // 発生したエラーをまとめてログ出力
-    if(error.nonEmpty) {
-      error.foreach(msg => logger.warn(msg))
+    logger.debug(s" => ${sentences.map(_.mkString("[", ",", "]")).mkString("[", ",", "]")}")
+    val pdoc = PerforatedDocument(doc.id, sentences.filter(_.nonEmpty))
+    if(logger.isDebugEnabled) {
+      logger.debug(s"$doc => ${pdoc.makeString(corpus)}")
     }
+    pdoc
+  }
 
-    PerforatedDocument(doc.id, sentences.filter(_.nonEmpty))
+  private[this] def transform(tokens:Seq[Token], placeholders:Map[Placeholder, Int]):Int = {
+    val perforatedId = shortenedSentences.indexOf(tokens)
+    lazy val debugSentence = PerforatedSentence(perforatedId, tokens).makeString(corpus.vocabulary, placeholders)
+    if(perforatedId < 0) {
+      logger.warn(s"未定義の文が含まれています: $debugSentence")
+    } else {
+      logger.debug(s"$debugSentence => $perforatedId")
+    }
+    perforatedId
   }
 
   private[this] def perforate(corpus:Corpus, doc:RelativeDocument[Morph.Instance]):Seq[(Int, Seq[(Seq[Token], Map[Placeholder, Int])])] = {
@@ -221,56 +220,33 @@ object PerforatedSentences {
     (tokens, args.toMap)
   }
 
-  implicit object _PerforatedTokensType extends _ValueType[Seq[Token]] {
-    override val typeName:String = "TEXT"
+  implicit object _PerforatedTokensType extends _ValueTypeForStringColumn[Seq[Token]] {
+    override def from(text:String):Seq[Token] = text.split("\\s+").filter(_.nonEmpty).map {
+      case morphId if Character.isDigit(morphId.head) => MorphId.fromString(morphId)
+      case placeholder => Placeholder.fromString(placeholder)
+    }.toSeq
 
-    override def toStore(value:Seq[Token]):String = value.map(_.toString).mkString(" ")
-
-    override def get(key:Any, rs:ResultSet, i:Int):Seq[Token] = {
-      val value = rs.getString(i)
-      value.split("\\s+").filter(_.nonEmpty).map {
-        case morphId if Character.isDigit(morphId.head) => MorphId.fromString(morphId)
-        case placeholder => Placeholder.fromString(placeholder)
-      }.toSeq
-    }
-
-    override def hash(value:Seq[Token]):Int = value.map {
-      case MorphId(id) => id
-      case Placeholder(num, pos) => num * pos.symbol
-    }.sum
-
-    override def equals(value1:Seq[Token], value2:Seq[Token]):Boolean = value1.zip(value2).forall { case (a, b) => a == b }
+    override def to(value:Seq[Token]):String = value.map(_.toString).mkString(" ")
   }
 
-  implicit object _PerforatedDocumentType extends _ValueType[PerforatedDocument] {
-    override val typeName:String = "TEXT"
-
-    override def toStore(value:PerforatedDocument):String = {
-      Json.stringify(JsArray(value.sentences.map(s => JsArray(s.map(i => JsNumber(i))))))
+  implicit object _PerforatedDocumentType extends _ValueTypeForStringColumn[PerforatedDocument] {
+    override def from(text:String):PerforatedDocument = Json.parse(text) match {
+      case JsArray(arr) =>
+        PerforatedDocument(-1, arr.map {
+          case JsArray(pss) =>
+            pss.map {
+              case JsNumber(num) => num.toInt
+              case unexpected =>
+                throw new IllegalArgumentException(s"unexpected perforated sentence id: ${Json.stringify(unexpected)}")
+            }
+          case unexpected =>
+            throw new IllegalArgumentException(s"unexpected perforated sentence ids: ${Json.stringify(unexpected)}")
+        })
+      case unexpected =>
+        throw new IllegalArgumentException(s"unexpected perforated document: ${Json.stringify(unexpected)}")
     }
 
-    override def get(key:Any, rs:ResultSet, i:Int):PerforatedDocument = {
-      val value = rs.getString(i)
-      Json.parse(value) match {
-        case JsArray(arr) =>
-          PerforatedDocument(-1, arr.map {
-            case JsArray(pss) =>
-              pss.map {
-                case JsNumber(num) => num.toInt
-                case unexpected =>
-                  throw new IllegalArgumentException(s"unexpected perforated sentence id: ${Json.stringify(unexpected)}")
-              }
-            case unexpected =>
-              throw new IllegalArgumentException(s"unexpected perforated sentence ids: ${Json.stringify(unexpected)}")
-          })
-        case unexpected =>
-          throw new IllegalArgumentException(s"unexpected perforated document: ${Json.stringify(unexpected)}")
-      }
-    }
-
-    override def hash(value:PerforatedDocument):Int = value.id
-
-    override def equals(value1:PerforatedDocument, value2:PerforatedDocument):Boolean = value1.id == value2.id
+    override def to(value:PerforatedDocument):String = Json.stringify(JsArray(value.sentences.map(s => JsArray(s.map(i => JsNumber(i))))))
   }
 
 }

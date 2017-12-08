@@ -2,8 +2,9 @@ package at.hazm.core.db
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import java.sql.{Connection, SQLException}
+import java.sql.{Connection, ResultSet}
 
+import at.hazm.core.db.Database._SerialKeyType
 import at.hazm.core.io.using
 import org.apache.tomcat.jdbc.pool.{DataSource, PoolProperties}
 import org.slf4j.LoggerFactory
@@ -73,47 +74,66 @@ class Database(val url:String, val username:String, val password:String, driver:
     * @param keyType KVS のキーに対する型クラス
     * @tparam K KVS のキーの型
     */
-  class KVS[K, V](table:String, keyColumn:String = "key", valueColumn:String = "value")(implicit keyType:_KeyType[K], valueType:_ValueType[V]) extends IndexedStore[K, V](this, table, keyColumn, valueColumn)(keyType, valueType) {
-    def set(key:K, value:V):Unit = insertOrUpdate(key, value)
+  class KVS[K, V](table:String, keyColumn:String = "key", valueColumn:String = "value")(implicit keyType:_KeyType[K], valueType:_ValueType[V]) extends IndexedStore[K, V](this, table, keyColumn, valueColumn, uniqueValue = false)(keyType, valueType) {
+    def set(key:K, value:V):Unit = db.trx { con =>
+      con.exec(s"INSERT INTO $table($keyColumn, hash, $valueColumn) VALUES(?, ?, ?) ON CONFLICT($keyColumn) DO UPDATE SET $valueColumn=EXCLUDED.$valueColumn, hash=EXCLUDED.hash", keyType.param(key), valueType.hash(value), valueType.toStore(value))
+    }
   }
 
-  class Index[V](table:String, keyColumn:String = "key", valueColumn:String = "value", unique:Boolean = false)(implicit valueType:_ValueType[V]) extends IndexedStore[Int, V](this, table, keyColumn, valueColumn)(_IntKeyType, valueType) {
+  /**
+    * ユニークな値を保存します。
+    *
+    * @param table       テーブル名
+    * @param keyColumn   キーカラム名
+    * @param valueColumn 値カラム名
+    * @param valueType   値カラムのタイプ
+    * @tparam V 値の型
+    */
+  class Index[V](table:String, keyColumn:String = "key", valueColumn:String = "value")(implicit valueType:_ValueType[V]) extends IndexedStore[Int, V](this, table, keyColumn, valueColumn, uniqueValue = true)(_SerialKeyType, valueType) {
 
-    def register(value:V):Int = db.trx { con =>
-      val hash = valueType.hash(value)
-
-      def append():Int = synchronized {
-        val vs = valueType.toStore(value)
-        val key = con.headOption(s"SELECT MAX($keyColumn) FROM $table")(_.getInt(1) + 1).getOrElse(0)
-        con.exec(s"INSERT INTO $table($keyColumn, hash, $valueColumn) VALUES(?, ?, ?)", key, hash, vs)
-        key
+    /**
+      * 指定された値をこのインデックスに追加します。同じ値がすでに存在する場合は何もせず既存のインデックスを返します。
+      *
+      * @param value インデックスに追加する値
+      * @return 値のインデックス
+      */
+    def add(value:V):Int = db.trx { con =>
+      con.setAutoCommit(false)
+      con.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED)
+      con.exec(s"LOCK TABLE $table")
+      getIds(con, value).headOption match {
+        case Some(index) =>
+          con.commit()
+          index
+        case None =>
+          con.exec(s"INSERT INTO $table(hash, $valueColumn) VALUES(?, ?)", valueType.hash(value), valueType.toStore(value))
+          con.commit()
+          indexOf(value)
       }
-
-      def retryLoop():Int = try {
-        if(unique) {
-          con.query(s"SELECT $keyColumn, $valueColumn FROM $table WHERE hash=?", hash) { r =>
-            val key = r.getInt(1)
-            (key, valueType.get(key, r, 2))
-          }.toList.find(r => valueType.equals(r._2, value)) match {
-            case Some((existingKey, _)) => existingKey
-            case None => append()
-          }
-        } else append()
-      } catch {
-        case ex:SQLException if ex.getSQLState == "23505" =>
-          retryLoop()
-      }
-
-      retryLoop()
     }
 
-    def indexOf(value:V):Int = getIds(value).headOption.getOrElse(-1)
+    /**
+      * 指定された値のインデックスを返します。
+      *
+      * @param value インデックスを参照する値
+      * @return 0 から始まる値のインデックス (存在しない場合は負の値)
+      */
+    def indexOf(value:V):Int = db.trx { con => getIds(con, value).headOption.getOrElse(-1) }
   }
 
 }
 
 object Database {
   private[Database] val logger = LoggerFactory.getLogger(classOf[Database])
+
+  private[Database] object _SerialKeyType extends _KeyType[Int] {
+    override val typeName:String = "SERIAL"
+
+    def get(rs:ResultSet, i:Int):Int = rs.getInt(i) - 1
+
+    override def param(key:Int):Int = key + 1
+  }
+
 
   /**
     * 指定された文字列をハッシュ化して返します。この機能は長い文字列に対して検索用のインデックスを作成するために使用します。

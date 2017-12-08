@@ -25,6 +25,13 @@ case class RelativeDocument[T <: Token](id:Int, sentences:Seq[RelativeSentence[T
     * @return 新しいノード
     */
   def replaceTokens[R <: Token](f:(T) => R):RelativeDocument[R] = RelativeDocument(id, sentences.map(_.replaceTokens(f)))
+
+  /**
+    * このインスタンスをデバッグ用に文字列化します。
+    *
+    * @return このインスタンスの文字列
+    */
+  override def toString:String = sentences.mkString("[", ",", "]")
 }
 
 object RelativeDocument {

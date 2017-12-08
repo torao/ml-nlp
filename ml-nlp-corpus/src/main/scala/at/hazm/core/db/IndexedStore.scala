@@ -6,6 +6,7 @@
 package at.hazm.core.db
 
 import java.io.PrintWriter
+import java.sql.{Connection, ResultSet}
 
 import at.hazm.core.io.using
 
@@ -21,7 +22,10 @@ import at.hazm.core.io.using
   * @param keyType KVS のキーに対する型クラス
   * @tparam K KVS のキーの型
   */
-abstract class IndexedStore[K, V](protected val db:Database, val table:String, keyColumn:String, valueColumn:String)(implicit keyType:_KeyType[K], valueType:_ValueType[V]) {
+abstract class IndexedStore[K, V](
+                                   protected val db:Database, val table:String, keyColumn:String, valueColumn:String,
+                                   uniqueValue:Boolean
+                                 )(implicit keyType:_KeyType[K], valueType:_ValueType[V]) {
 
   // テーブルの作成
   db.trx { con =>
@@ -34,37 +38,23 @@ abstract class IndexedStore[K, V](protected val db:Database, val table:String, k
   }
 
   def get(key:K):Option[V] = db.trx {
-    _.headOption(s"SELECT $valueColumn FROM $table WHERE $keyColumn=?", key)(rs => valueType.get(key, rs, 1))
+    _.headOption(s"SELECT $valueColumn FROM $table WHERE $keyColumn=?", keyType.param(key))(rs => valueType.get(rs, 1))
   }
 
   def getAll(key:K*):Map[K, V] = db.trx {
-    _.query(s"SELECT $keyColumn, $valueColumn FROM $table WHERE $keyColumn IN (${key.mkString(",")})") { rs =>
-      val key = keyType.get(rs, 1)
-      key -> valueType.get(key, rs, 2)
-    }.toMap
+    _.query(s"SELECT $keyColumn, $valueColumn FROM $table WHERE $keyColumn IN (${key.map(k => keyType.param(k)).mkString(",")})")(getKV).toMap
   }
 
-  def getIds(value:V):Seq[K] = db.trx { con =>
-    val hash = valueType.hash(value)
-    con.query(s"SELECT $keyColumn, $valueColumn FROM $table WHERE hash=?", hash) { rs =>
-      val key = keyType.get(rs, 1)
-      (key, valueType.get(key, rs, 2))
-    }.filter(x => valueType.equals(x._2, value)).map(_._1).toList
+  protected def getIds(con:Connection, value:V):Seq[K] = {
+    con.query(s"SELECT $keyColumn, $valueColumn FROM $table WHERE hash=? AND $valueColumn=?", valueType.hash(value), valueType.toStore(value)) { rs =>
+      keyType.get(rs, 1)
+    }.toList
   }
 
   def randomSelect(r: => Double):(K, V) = db.trx { con =>
     val count = con.head(s"SELECT COUNT(*) FROM $table")(_.getInt(1))
     val index = (count * r).toInt
-    con.head(s"SELECT $keyColumn, $valueColumn FROM $table ORDER BY hash LIMIT ?, 1", index) { rs =>
-      val key = keyType.get(rs, 1)
-      (key, valueType.get(key, rs, 2))
-    }
-  }
-
-  protected def insertOrUpdate(key:K, value:V):Unit = db.trx { con =>
-    val hash = valueType.hash(value)
-    val vs = valueType.toStore(value)
-    con.exec(s"INSERT INTO $table($keyColumn, hash, $valueColumn) VALUES(?, ?, ?) ON CONFLICT($keyColumn) DO UPDATE SET hash=?, $valueColumn=?", key, hash, vs, hash, vs)
+    con.head(s"SELECT $keyColumn, $valueColumn FROM $table ORDER BY hash LIMIT ?, 1", index)(getKV)
   }
 
   def deleteAll():Unit = db.trx { con =>
@@ -72,27 +62,18 @@ abstract class IndexedStore[K, V](protected val db:Database, val table:String, k
   }
 
   def foreach(f:(K, V) => Unit):Unit = db.trx { con =>
-    con.foreach(s"SELECT $keyColumn, $valueColumn FROM $table ORDER BY $keyColumn") { rs =>
-      val key = keyType.get(rs, 1)
-      f(key, valueType.get(key, rs, 2))
-    }
+    con.foreach(s"SELECT $keyColumn, $valueColumn FROM $table ORDER BY $keyColumn")(getKV)
   }
 
   def foreachAfter(skip:K)(f:(K, V) => Unit):Unit = db.trx { con =>
-    con.foreach(s"SELECT $keyColumn, $valueColumn FROM $table WHERE $keyColumn > ? ORDER BY $keyColumn", skip) { rs =>
-      val key = keyType.get(rs, 1)
-      (key, valueType.get(key, rs, 2))
-    }
+    con.foreach(s"SELECT $keyColumn, $valueColumn FROM $table WHERE $keyColumn > ? ORDER BY $keyColumn", skip)(getKV)
   }
 
   def toCursor:Cursor[(K, V)] = {
     val con = db.newConnection
     val stmt = con.prepareStatement(s"SELECT $keyColumn, $valueColumn FROM $table ORDER BY $keyColumn")
     val rs = stmt.executeQuery()
-    new Cursor({ rs =>
-      val key = keyType.get(rs, 1)
-      (key, valueType.get(key, rs, 2))
-    }, rs, stmt, con)
+    new Cursor(getKV, rs, stmt, con)
   }
 
   def toCursor(limit:Int, offset:Int = 0):Cursor[(K, V)] = {
@@ -101,10 +82,7 @@ abstract class IndexedStore[K, V](protected val db:Database, val table:String, k
     stmt.setInt(1, limit)
     stmt.setInt(2, offset)
     val rs = stmt.executeQuery()
-    new Cursor({ rs =>
-      val key = keyType.get(rs, 1)
-      (key, valueType.get(key, rs, 2))
-    }, rs, stmt, con)
+    new Cursor(getKV, rs, stmt, con)
   }
 
   def toCursor(condition:String, args:Any*):Cursor[(K, V)] = {
@@ -112,20 +90,31 @@ abstract class IndexedStore[K, V](protected val db:Database, val table:String, k
     val stmt = con.prepareStatement(s"SELECT $keyColumn, $valueColumn FROM $table WHERE $condition ORDER BY $keyColumn")
     args.zipWithIndex.foreach { case (arg, i) => stmt.setObject(i + 1, arg) }
     val rs = stmt.executeQuery()
-    new Cursor({ rs =>
-      val key = keyType.get(rs, 1)
-      (key, valueType.get(key, rs, 2))
-    }, rs, stmt, con)
+    new Cursor(getKV, rs, stmt, con)
   }
+
+  private[this] def getKV(rs:ResultSet):(K, V) = (keyType.get(rs, 1), valueType.get(rs, 2))
 
   def size:Int = db.trx(_.headOption(s"SELECT COUNT(*) FROM $table")(_.getInt(1))).getOrElse(0)
 
-  def exists(key:K):Boolean = db.trx(_.headOption(s"SELECT COUNT(*) FROM $table WHERE $keyColumn=?", key)(_.getInt(1) > 0)).getOrElse(false)
+  def exists(key:K):Boolean = db.trx(_.headOption(s"SELECT COUNT(*) FROM $table WHERE $keyColumn=?", keyType.param(key))(_.getInt(1) > 0)).getOrElse(false)
 
   def export(out:PrintWriter, delim:String = "\t"):Unit = using(toCursor) { cursor =>
     cursor.foreach { case (key, value) =>
       out.println(s"${keyType.export(key)}$delim${valueType.export(value)}")
     }
   }
+
+}
+
+object IndexedStore {
+
+  sealed trait ValueIndex
+
+  case object NO_INDEX extends ValueIndex
+
+  case object INDEX extends ValueIndex
+
+  case object UNIQUE extends ValueIndex
 
 }

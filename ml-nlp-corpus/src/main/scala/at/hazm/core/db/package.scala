@@ -1,6 +1,6 @@
 package at.hazm.core
 
-import java.sql.{Connection, ResultSet}
+import java.sql.{Connection, ResultSet, SQLException}
 
 import at.hazm.core.db.Database.makeHash
 import at.hazm.core.io.using
@@ -38,6 +38,9 @@ package object db {
       }
       result
     } catch {
+      case ex:SQLException if RDBMS.Default.isDuplicateKey(ex) =>
+        sqlLog(sql, args, System.currentTimeMillis() - t0, ex.toString, INFO)
+        throw ex
       case ex:Throwable =>
         sqlLog(sql, args, System.currentTimeMillis() - t0, ex.toString, ERROR)
         throw ex
@@ -116,6 +119,8 @@ package object db {
 
     def createTable(sql:String):Boolean = exec(s"CREATE TABLE IF NOT EXISTS $sql") > 0
 
+    def createSequence(sql:String):Boolean = exec(s"CREATE SEQUENCE IF NOT EXISTS $sql") > 0
+
     def createIndex(sql:String, unique:Boolean = false):Boolean = {
       def _norm(name:String) = {
         val Max = 63 - 4
@@ -125,7 +130,7 @@ package object db {
       val pattern = """([a-zA-Z0-9\-_]+\.)?([a-zA-Z0-9\-_]+)\((.*)\)""".r
       val name = sql match {
         case pattern(_, table, param) =>
-          _norm(table + "_" + param.split("\\s*,\\s*").filter(_.nonEmpty).mkString("_"))
+          _norm(table + "_" + param.split("\\s*,\\s*").map(_.replaceAll("[^a-zA-Z0-9_]+", "_")).filter(_.nonEmpty).mkString("_"))
         case unknown =>
           _norm(unknown.split("[^a-zA-Z0-9\\-_]+").filter(_.nonEmpty).mkString("_"))
       }
@@ -176,6 +181,9 @@ package object db {
     /** 結果セットからこのクラスが定義する型の値を取得します。 */
     def get(rs:ResultSet, i:Int):T
 
+    /** 指定された値をクエリーパラメータ用に変換します。 */
+    def param(key:T):T = key
+
     /** データをエクスポート用に文字列変換 */
     def export(value:T):String = value.toString
   }
@@ -213,22 +221,22 @@ package object db {
 
     def toStore(value:T):Object
 
-    def get(key:Any, rs:ResultSet, i:Int):T
-
-    def hash(value:T):Int
+    def get(rs:ResultSet, i:Int):T
 
     def equals(value1:T, value2:T):Boolean
+
+    def hash(value:T):Int
 
     /** データをエクスポート用に文字列変換 */
     def export(value:T):String = value.toString
   }
 
   trait _ValueTypeForStringColumn[T] extends _ValueType[T] {
-    val typeName:String = "TEXT"
+    val typeName:String = RDBMS.Default.LONGVARCHAR
 
     def toStore(value:T):Object = to(value)
 
-    def get(key:Any, rs:ResultSet, i:Int):T = from(rs.getString(i))
+    def get(rs:ResultSet, i:Int):T = from(rs.getString(i))
 
     def hash(value:T):Int = makeHash(to(value))
 
@@ -240,11 +248,11 @@ package object db {
   }
 
   trait _ValueTypeForBinaryColumn[T] extends _ValueType[T] {
-    val typeName:String = "BYTEA"
+    val typeName:String = RDBMS.Default.LONGVARBINARY
 
     def toStore(value:T):Object = to(value)
 
-    def get(key:Any, rs:ResultSet, i:Int):T = from(rs.getBytes(i))
+    def get(rs:ResultSet, i:Int):T = from(rs.getBytes(i))
 
     def hash(value:T):Int = makeHash(to(value))
 

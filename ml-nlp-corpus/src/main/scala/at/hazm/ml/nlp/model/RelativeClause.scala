@@ -11,7 +11,6 @@
  */
 package at.hazm.ml.nlp.model
 
-import at.hazm.ml.nlp.model.Syntax.Node
 import play.api.libs.json._
 
 /**
@@ -40,6 +39,13 @@ case class RelativeClause[T <: Token](id:Int, link:Int, rel:String, score:Double
 
   // link="-1" rel="D" score="0.000000" head="12" func="13"
   override def toJSON:JsValue = Json.arr(id, super.toJSON, link, score, rel, head, func)
+
+  /**
+    * このインスタンスをデバッグ用に文字列化します。
+    *
+    * @return このインスタンスの文字列
+    */
+  override def toString:String = tokens.map(_.surface).mkString("(", ".", ")")
 }
 
 object RelativeClause {

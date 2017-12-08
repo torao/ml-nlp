@@ -2,7 +2,6 @@ package at.hazm.ml.nlp
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, InputStreamReader}
 import java.nio.charset.StandardCharsets
-import java.sql.ResultSet
 
 import at.hazm.core.db._
 import at.hazm.core.io.{readAllChars, using}
@@ -55,18 +54,8 @@ class Corpus(val db:Database, val namespace:String) {
 object Corpus {
   private[this] type STORE_DOC = RelativeDocument[Morph.Instance]
 
-  private[Corpus] object _RelativeDocumentType extends _ValueType[STORE_DOC] {
-    val typeName:String = "BYTEA"
-
-    def toStore(value:STORE_DOC):AnyRef = {
-      val json = Json.stringify(value.toJSON)
-      val baos = new ByteArrayOutputStream()
-      using(new BZip2CompressorOutputStream(baos)) { out => out.write(json.getBytes(StandardCharsets.UTF_8)) }
-      baos.toByteArray
-    }
-
-    def get(key:Any, rs:ResultSet, i:Int):STORE_DOC = {
-      val bytes = rs.getBytes(i)
+  private[Corpus] object _RelativeDocumentType extends _ValueTypeForBinaryColumn[STORE_DOC] {
+    override def from(bytes:Array[Byte]):STORE_DOC = {
       val bais = new ByteArrayInputStream(bytes)
       val json = using(new InputStreamReader(new BZip2CompressorInputStream(bais), StandardCharsets.UTF_8)) { in =>
         readAllChars(in, bytes.length * 2)
@@ -74,12 +63,12 @@ object Corpus {
       RelativeDocument.fromJSON(Json.parse(json))
     }
 
-    /**
-      * 内容から ID を逆引きする操作は ID で同一性が決定するため ID をハッシュとする。
-      */
-    def hash(value:STORE_DOC):Int = value.id
-
-    def equals(value1:STORE_DOC, value2:STORE_DOC):Boolean = value1.id == value2.id
+    override def to(value:STORE_DOC):Array[Byte] = {
+      val json = Json.stringify(value.toJSON)
+      val baos = new ByteArrayOutputStream()
+      using(new BZip2CompressorOutputStream(baos)) { out => out.write(json.getBytes(StandardCharsets.UTF_8)) }
+      baos.toByteArray
+    }
 
     override def export(value:STORE_DOC):String = Json.stringify(value.toJSON)
   }

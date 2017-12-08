@@ -112,7 +112,7 @@ object CaboCha {
     /**
       * CaboCha によって解析された形態素を標準形式の形態素に変換します。
       */
-    def toMorph:Morph = Morph(baseForm, pos1, pos2, pos3, pos4)
+    def toMorph:Morph = Morph(if(baseForm != null && baseForm != "" && baseForm != "*") baseForm else surface, pos1, pos2, pos3, pos4)
 
     def toInstance(morphId:Int):Morph.Instance = {
       val attr:Map[String, String] = if(ne == "*" || ne.isEmpty) Map.empty else Map("ne" -> ne)

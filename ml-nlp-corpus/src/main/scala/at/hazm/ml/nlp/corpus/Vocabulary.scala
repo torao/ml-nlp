@@ -9,7 +9,7 @@ import java.sql.ResultSet
 import java.util.concurrent.atomic.AtomicInteger
 
 import at.hazm.core.db._
-import at.hazm.ml.nlp.model.Morph
+import at.hazm.ml.nlp.model.{Morph, POS}
 
 class Vocabulary private[nlp](val db:Database, table:String) {
 
@@ -38,6 +38,17 @@ class Vocabulary private[nlp](val db:Database, table:String) {
     if(invalidIds.nonEmpty) {
       throw new IllegalStateException(s"vocabulary id conflict in $table (perhaps some morphs removed?): ${invalidIds.mkString(", ")}")
     }
+  }
+
+  /** すべての品詞に対するデフォルトの形態素インスタンス。 */
+  lazy val defaultInstances:Map[POS, Morph.Instance] = {
+    // すべての品詞のデフォルト値を登録
+    val poses = POS.values.toList
+    val morphs = poses.map(_.default)
+    val ids = registerAll(morphs)
+    ids.zip(morphs).zip(poses).map { case ((id, morph), pos) =>
+      (pos, Morph.Instance(id, morph.surface, "*", "*", "*", "*", Map.empty))
+    }.toMap
   }
 
   /**

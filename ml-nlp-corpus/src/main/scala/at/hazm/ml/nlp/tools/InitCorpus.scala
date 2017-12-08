@@ -1,6 +1,6 @@
 package at.hazm.ml.nlp.tools
 
-import java.io.{BufferedReader, File, InputStreamReader}
+import java.io.File
 import java.lang.management.ManagementFactory
 import java.util.concurrent.{Executors, TimeUnit}
 
@@ -29,39 +29,11 @@ object InitCorpus {
     logger.info(s"コーパス変換処理を開始します: 名前空間=$namespace, ファイル=$src")
     using(new Database("jdbc:postgresql://localhost/ml-nlp", "postgres", "postgres", "org.postgresql.Driver")) { db =>
       val corpus = Wikipedia2Corpus.makeCorpus(namespace, src, db)
-      Morph2FeatureVector.init(corpus, namespace)
+      // Morph2FeatureVector.init(corpus, namespace)
       Paragraph2PerforatedSentence.init(corpus)
       val lstm = PerforatedSentence2LSTM.train(corpus, namespace)
 
-      // LSTM 予測の実行
-      val in = new BufferedReader(new InputStreamReader(System.in))
-      val buffer = new StringBuilder()
-
-      def _loop():Unit = {
-        System.out.print(">> ")
-        val text = in.readLine()
-        if(text != null && !text.equalsIgnoreCase("quit")) {
-          if(text.trim().nonEmpty){
-            try {
-              val doc = Paragraph2PerforatedSentence.transform(corpus, Wikipedia2Corpus.transform(corpus, -1, text))
-              if(doc.sentences.nonEmpty){
-                PerforatedSentence2LSTM.predict(corpus, doc, lstm, 10).map { perforatedId =>
-                  val sentence = corpus.perforatedSentences.apply(perforatedId)
-                  sentence.mkString(corpus)
-                }.foreach(s => println(s"<< $s"))
-                buffer.append(text)
-              } else println("<< 認識できる文が含まれていませんでした。")
-            } catch {
-              case ex:Throwable =>
-                ex.printStackTrace()
-            }
-          }
-          _loop()
-        }
-      }
-
-      logger.info("LSTM 文章予測インタラクティブ・シェルを開始しています (quit で終了)")
-      _loop()
+      InteractiveShell.start(corpus, lstm)
     }
 
     executor.shutdown()

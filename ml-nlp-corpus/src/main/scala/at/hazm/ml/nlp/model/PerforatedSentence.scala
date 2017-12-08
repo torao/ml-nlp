@@ -17,30 +17,6 @@ case class PerforatedSentence(id:Int, tokens:Seq[PerforatedSentence.Token]) {
 
 object PerforatedSentence {
 
-  sealed trait POS {
-    def symbol:Char
-  }
-
-  object POS {
-    def valueOf(symbol:Char):POS = symbol match {
-      case 'N' => Noun
-      case 'V' => Verb
-      case 'A' => Adjective
-    }
-  }
-
-  case object Noun extends POS {
-    val symbol:Char = 'N'
-  }
-
-  case object Verb extends POS {
-    val symbol:Char = 'V'
-  }
-
-  case object Adjective extends POS {
-    val symbol:Char = 'A'
-  }
-
   sealed trait Token
 
   case class MorphId(id:Int) extends Token {

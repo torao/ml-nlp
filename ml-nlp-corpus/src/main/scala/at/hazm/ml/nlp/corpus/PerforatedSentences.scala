@@ -5,7 +5,7 @@ import java.sql.ResultSet
 import at.hazm.core.db._
 import at.hazm.ml.nlp.Corpus
 import at.hazm.ml.nlp.model.PerforatedSentence._
-import at.hazm.ml.nlp.model.{Morph, PerforatedDocument, PerforatedSentence, RelativeDocument}
+import at.hazm.ml.nlp.model.{Morph, POS, PerforatedDocument, PerforatedSentence, RelativeDocument}
 import org.slf4j.LoggerFactory
 import play.api.libs.json.{JsArray, JsNumber, Json}
 
@@ -42,16 +42,6 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
     * 最短化された文が実際に存在する文章を保持するための KVS。
     */
   private[this] val shortenedInstances = new db.KVS[Int, PerforatedDocument](instanceTable, "document_id", "perforated_sentences")(_IntKeyType, _PerforatedDocumentType)
-
-  /**
-    * 最短文から削除する形態素の表現。
-    */
-  private[this] val StopWords = Set("、", "。")
-
-  /**
-    * プレースホルダに置き換える品詞。
-    */
-  private[this] val POS2Sign = Map("名詞" -> Noun, "動詞" -> Verb, "形容詞" -> Adjective)
 
   def size:Int = shortenedSentences.size
 
@@ -96,7 +86,7 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
       perforated.map { case (tokens, _) =>
         val perforatedId = shortenedSentences.indexOf(tokens)
         if(perforatedId < 0) {
-          error.append("undefined sentence: " + tokens.map {
+          error.append("未定義の文が含まれています: " + tokens.map {
             case MorphId(morphId) =>
               corpus.vocabulary(morphId).surface
             case p:Placeholder => s"[${p.pos.symbol}]"
@@ -111,7 +101,7 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
       error.foreach(msg => logger.warn(msg))
     }
 
-    PerforatedDocument(doc.id, sentences)
+    PerforatedDocument(doc.id, sentences.filter(_.nonEmpty))
   }
 
   private[this] def perforate(corpus:Corpus, doc:RelativeDocument[Morph.Instance]):Seq[(Int, Seq[(Seq[Token], Map[Placeholder, Int])])] = {
@@ -122,31 +112,9 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
       (sentenceNum, sentence
         .breakdown()
         .map(s => s.flatten.tokens.map(m => (m.morphId, morphs(m.morphId))))
-        .map(s => optimize(s))
+        .map(s => PerforatedSentences.optimize(s))
         .filter(_._1.nonEmpty))
     }
-  }
-
-  private[this] def optimize(sentence:Seq[(Int, Morph)]):(Seq[Token], Map[Placeholder, Int]) = {
-    val tokens = mutable.Buffer[PerforatedSentence.Token]()
-    val args = mutable.HashMap[Placeholder, Int]()
-    var prePOS = ""
-    sentence.filter(s => !StopWords.contains(s._2.surface)).foreach { case (id, m) =>
-      // 連続したプレースホルダ対象の品詞を削除
-      if(!POS2Sign.contains(m.pos1) || prePOS != m.pos1) {
-        val token = POS2Sign.get(m.pos1) match {
-          case Some(pos) =>
-            val num = args.size
-            val placeholder = Placeholder(num, pos)
-            args.put(placeholder, id)
-            placeholder
-          case None => MorphId(id)
-        }
-        tokens.append(token)
-        prePOS = m.pos1
-      }
-    }
-    (tokens, args.toMap)
   }
 
 
@@ -198,6 +166,61 @@ class PerforatedSentences private[nlp](db:Database, namespace:String, corpus:Cor
 object PerforatedSentences {
   private[PerforatedSentences] val logger = LoggerFactory.getLogger(classOf[PerforatedSentence])
 
+  /** 最短文から削除する形態素の表現。 */
+  private[this] val StopWords = Set("、", "。")
+
+  /** 最短文から削除する形態素の品詞。 */
+  private[this] val StopPOS1 = Set(POS.Filler, POS.Other).map(_.default.pos1)
+  private[this] val StopPOS2 = Set((POS.Noun.default.pos1, "引用文字列"))
+
+  /** プレースホルダに置き換える品詞。 */
+  private[this] val POS2Sign = Seq(POS.Noun, POS.Verb, POS.Adjective).groupBy(_.default.pos1).mapValues(_.head)
+
+  /** 日時を表すパターン */
+  private[this] val DateTime = Seq(
+    "\\d+年", "\\d+月", "\\d+日", "\\d+年\\d+月", "\\d+月\\d+日", "\\d+時", "\\d+分", "\\d+秒"
+  ).map(_.r.pattern)
+
+  /**
+    * 指定された文をプレースホルダ化した最短文に変換します。不要な形態素は除去し、連続したプレースホルダは一つにまとめられます。
+    *
+    * @param sentence プレースホルダ化する文
+    * @return プレースホルダ化したトークンとプレースホルダの形態素
+    */
+  private[PerforatedSentences] def optimize(sentence:Seq[(Int, Morph)]):(Seq[Token], Map[Placeholder, Int]) = {
+    val tokens = mutable.Buffer[PerforatedSentence.Token]()
+    val args = mutable.HashMap[Placeholder, Int]()
+    var prePOS = ""
+    sentence
+      .filter(s => !StopWords.contains(s._2.surface)) // 除外する表現
+      .filter(s => !StopPOS1.contains(s._2.pos1)) // 除外する品詞1
+      .filter(s => !StopPOS2.contains((s._2.pos1, s._2.pos2))) // 除外する品詞2
+      .map { case (id, token) =>
+      (id, token match {
+        case num@Morph(_, POS.Noun.label, "数", _, _) => num.copy(surface = "$NUMBER")
+        case datetime@Morph(surface, POS.Noun.label, "固有名詞", "一般", _) if DateTime.exists(_.matcher(surface).matches()) =>
+          datetime.copy(surface = "$DATETIME")
+        case norm => norm
+      })
+    }
+      .foreach { case (id, m) =>
+        // 連続したプレースホルダ対象の品詞を削除
+        if(!POS2Sign.contains(m.pos1) || prePOS != m.pos1) {
+          val token = POS2Sign.get(m.pos1) match {
+            case Some(pos) =>
+              val num = args.size
+              val placeholder = Placeholder(num, pos)
+              args.put(placeholder, id)
+              placeholder
+            case None => MorphId(id)
+          }
+          tokens.append(token)
+          prePOS = m.pos1
+        }
+      }
+    (tokens, args.toMap)
+  }
+
   implicit object _PerforatedTokensType extends _ValueType[Seq[Token]] {
     override val typeName:String = "TEXT"
 
@@ -211,7 +234,10 @@ object PerforatedSentences {
       }.toSeq
     }
 
-    override def hash(value:Seq[Token]):Int = value.map(_.hashCode()).sum
+    override def hash(value:Seq[Token]):Int = value.map {
+      case MorphId(id) => id
+      case Placeholder(num, pos) => num * pos.symbol
+    }.sum
 
     override def equals(value1:Seq[Token], value2:Seq[Token]):Boolean = value1.zip(value2).forall { case (a, b) => a == b }
   }

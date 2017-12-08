@@ -16,7 +16,7 @@
   </category>
 
   <category name="at.hazm.core.db.SQL" additivity="false">
-    <level value="warn" />
+    <level value="info" />
     <appender-ref ref="stdout" />
   </category>
 

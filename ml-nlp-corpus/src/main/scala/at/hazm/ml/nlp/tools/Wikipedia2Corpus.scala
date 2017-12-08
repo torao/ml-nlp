@@ -8,7 +8,7 @@ import at.hazm.core.io.using
 import at.hazm.core.util.Diagnostics.Progress
 import at.hazm.ml.etl.{FileSource, TextLine}
 import at.hazm.ml.nlp.ja.{CaboCha, ParallelCaboCha}
-import at.hazm.ml.nlp.model.{Morph, RelativeDocument}
+import at.hazm.ml.nlp.model.{Morph, POS, RelativeDocument}
 import at.hazm.ml.nlp.{Corpus, Text}
 import org.slf4j.LoggerFactory
 
@@ -68,15 +68,19 @@ object Wikipedia2Corpus {
     val morphs = tokens.map(_.toMorph)
     val ids = if(register) corpus.vocabulary.registerAll(morphs) else corpus.vocabulary.indicesOf(morphs)
 
-    // すべての形態素が定義されていることを確認 (register = false の場合のみ)
     val idWithToken = ids.zip(tokens)
-    val morphNotExists = idWithToken.filter(_._1 < 0)
-    if(morphNotExists.nonEmpty) {
-      throw new MorphNotFoundException(morphNotExists.map(_._2.toMorph))
-    }
-
-    val token2Instance = idWithToken.map { case (morphId, token) =>
-      (token.key, token.toInstance(morphId))
+    val token2Instance:Map[String, Morph.Instance] = idWithToken.map { case (morphId, token) =>
+      val instance = if(morphId >= 0) {
+        token.toInstance(morphId)
+      } else {
+        logger.warn(s"未定義の形態素が含まれています: ${token.surface}:${token.pos}")
+        POS.values.find(_.default.pos1 == token.pos1) match {
+          case Some(unknown) => corpus.vocabulary.defaultInstances(unknown)
+          case None =>
+            throw new IllegalArgumentException(s"形態素を認識できません: ${token.surface}:${token.pos}")
+        }
+      }
+      (token.key, instance)
     }.toMap
     val instanceDocument = doc.replaceTokens(t => token2Instance(t.key))
     if(register) {

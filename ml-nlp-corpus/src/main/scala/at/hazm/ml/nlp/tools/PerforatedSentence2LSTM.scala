@@ -36,15 +36,15 @@ object PerforatedSentence2LSTM {
   val DefaultSentenceSize:Int = 10000
   val DefaultMaxSentencesPerDoc:Int = 1000
 
-  def predict(corpus:Corpus, doc:PerforatedDocument, model:MultiLayerNetwork, predictCount:Int, sampleSentenceSize:Int = DefaultSentenceSize, maxSentencesPerDoc:Int = DefaultMaxSentencesPerDoc):Seq[Int] = {
+  def predict(corpus:Corpus, doc:PerforatedDocument, model:MultiLayerNetwork, predictCount:Int, maxSentencesPerDoc:Int = DefaultMaxSentencesPerDoc):Seq[Int] = {
 
-    //Create input for initialization
-    val inputSentences = doc.sentences
-    val numSamples = inputSentences.length
-    val initializationInput = Nd4j.zeros(numSamples, sampleSentenceSize, maxSentencesPerDoc)
-
-    for((sentence, i) <- inputSentences.zipWithIndex; (s, j) <- sentence.zipWithIndex){
-      initializationInput.putScalar(Array(i, s, j), 1.0f)
+    // 文 ID の 1-hot vector を時系列に並べる
+    val timeStep = doc.sentences.flatten
+    val numSamples = 1
+    val nIn = corpus.perforatedSentences.size
+    val initializationInput = Nd4j.zeros(numSamples, nIn, timeStep.length)
+    for((sentenceId, t) <- timeStep.zipWithIndex) {
+      initializationInput.putScalar(Array(0, sentenceId, t), 1.0f)
     }
 
     //Sample from network (and feed samples back into input) one character at a time (for all samples)
@@ -56,10 +56,10 @@ object PerforatedSentence2LSTM {
     val sequel = mutable.Buffer[Int]()
     for(i <- 0 until predictCount) {
       //Set up next input (single time step) by sampling from previous output
-      val nextInput = Nd4j.zeros(numSamples, sampleSentenceSize)
+      val nextInput = Nd4j.zeros(numSamples, nIn)
       //Output is a probability distribution. Sample from this for each example we want to generate, and add it to the new input
       for(s <- 0 until numSamples) {
-        val outputProbDistribution = for(j <- 0 until sampleSentenceSize) yield output.getDouble(s, j)
+        val outputProbDistribution = for(j <- 0 until nIn) yield output.getDouble(s, j)
         val sampledCharacterIdx = sampleFromDistribution(outputProbDistribution.toArray)
 
         nextInput.putScalar(Array(s, sampledCharacterIdx), 1.0f) //Prepare next time step input

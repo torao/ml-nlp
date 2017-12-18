@@ -8,8 +8,8 @@ import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream
 import org.slf4j.LoggerFactory
 
 import scala.annotation.tailrec
-import scala.language.reflectiveCalls
 import scala.collection.mutable
+import scala.language.reflectiveCalls
 
 package object io {
   type CLOSEABLE = {def close():Unit}
@@ -66,6 +66,7 @@ package object io {
     *
     * @param file       ファイル
     * @param bufferSize バッファサイズ (バイト数)
+    * @param callback   読み出し済みの (バイト数, 行数) コールバック
     * @return 入力ストリーム
     */
   def openBinaryInput(file:File, bufferSize:Int = DefaultIOBufferSize, callback:(Long, Long) => Unit = null):InputStream = {
@@ -86,6 +87,7 @@ package object io {
     * @param file       ファイル
     * @param charset    文字セット
     * @param bufferSize バッファサイズ (バイト数)
+    * @param callback   読み出し済みの (文字数, 行数) コールバック
     * @return 入力ストリーム
     */
   def openTextInput(file:File, charset:Charset = StandardCharsets.UTF_8, bufferSize:Int = DefaultIOBufferSize, callback:(Long, Long) => Unit = null):BufferedReader = {
@@ -154,6 +156,7 @@ package object io {
 
   object text {
     private[this] val logger = LoggerFactory.getLogger(getClass.getName.dropRight(1))
+
     trait CloseableIterator[T] extends Iterator[T] with AutoCloseable
 
     private[io] def parser(_in:Reader, fieldSeparator:Char):CloseableIterator[Seq[String]] = new CloseableIterator[Seq[String]]() {
@@ -226,7 +229,7 @@ package object io {
               case eof if eof == fieldSeparator =>
                 (buffer.toString(), eof)
               case ch2 =>
-                logger.warn(s"[${in.line+1}:${in.column+1}]: double-quote expect: $buffer${ch2.toChar}")
+                logger.warn(s"[${in.line + 1}:${in.column + 1}]: double-quote expect: $buffer${ch2.toChar}")
                 buffer.append("\"")
                 buffer.append(ch2.toChar)
                 _readField(quoted = false, buffer)

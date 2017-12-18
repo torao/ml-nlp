@@ -5,6 +5,7 @@ import java.sql.{Connection, ResultSet, SQLException}
 import at.hazm.core.db.Database.makeHash
 import at.hazm.core.io.using
 import org.slf4j.LoggerFactory
+import play.api.libs.json.{JsValue, Json}
 
 package object db {
   private[db] val logger = LoggerFactory.getLogger("at.hazm.core.db.SQL")
@@ -285,6 +286,12 @@ package object db {
     override def to(value:Seq[Double]):String = value.mkString(" ")
 
     override def export(value:Seq[Double]):String = value.mkString(" ")
+  }
+
+  implicit object _JsonValueType extends _ValueTypeForStringColumn[JsValue] {
+    override def from(text:String):JsValue = Json.parse(text)
+
+    override def to(value:JsValue):String = Json.stringify(value)
   }
 
 }

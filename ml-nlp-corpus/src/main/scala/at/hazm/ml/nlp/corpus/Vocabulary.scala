@@ -21,7 +21,7 @@ class Vocabulary private[nlp](val db:Database, table:String) {
   db.trx { con =>
     // コーパステーブルの作成
     con.createTable(
-      s"""$table(id INTEGER NOT NULL PRIMARY KEY, hash INTEGER NOT NULL, surface VARCHAR(30) NOT NULL,
+      s"""$table(id INTEGER NOT NULL PRIMARY KEY, hash INTEGER NOT NULL, surface VARCHAR(1024) NOT NULL,
          |pos1 VARCHAR(15) NOT NULL, pos2 VARCHAR(15) NOT NULL, pos3 VARCHAR(15) NOT NULL, pos4 VARCHAR(15) NOT NULL)""".stripMargin)
     con.createIndex(s"$table(surface, pos1, pos2, pos3, pos4)", unique = true)
     con.createIndex(s"$table(surface)")

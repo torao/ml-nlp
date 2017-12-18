@@ -49,6 +49,18 @@ class Corpus(val db:Database, val namespace:String) {
     */
   val perforatedSentences = new PerforatedSentences(db, tableName("perforated"), this)
 
+  /**
+    * ドキュメントの保存と参照を行うための KVS を作成します。
+    *
+    * @param name ドキュメントストアの名前
+    * @param _vt  値の変換処理
+    * @tparam T 値の型
+    * @return KVS
+    */
+  def newDocumentStore[T](name:String)(implicit _vt:_ValueType[T]):Database#KVS[Int, T] = {
+    new db.KVS[Int, T](tableName(s"doc_$name"))(_IntKeyType, _vt)
+  }
+
 }
 
 object Corpus {

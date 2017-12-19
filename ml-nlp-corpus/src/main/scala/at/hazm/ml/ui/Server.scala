@@ -8,23 +8,26 @@ package at.hazm.ml.ui
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
-import akka.stream.ActorMaterializer
-import com.typesafe.config.ConfigFactory
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
 import akka.http.scaladsl.server.Directives._
+import akka.stream.{ActorMaterializer, Materializer}
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
+import scala.io.StdIn
 
-object Server extends RequestTimeout {
+object Server {
   def main(args:Array[String]):Unit = {
-    val config = ConfigFactory.load()
-    val host = config.getString("host")
-    val port = config.getInt("port")
+    implicit val _system:ActorSystem = ActorSystem()
+    implicit val _dispatcher:ExecutionContext = _system.dispatcher
+    implicit val _materializer:Materializer = ActorMaterializer()
 
-    implicit val _system = ActorSystem()
-    implicit val _dispatcher = _system.dispatcher
-    implicit val _materializer = ActorMaterializer()
-
-    val api = new RestApi(_system, requestTimeout(config)).route
-    val bindingFuture:Future[ServerBinding] = Http().bindAndHandle(api, host, port)
+    val route = path("hello") {
+      get {
+        complete(HttpEntity(ContentTypes.`text/html(UTF-8)`, "<html><body>hello, world</body></html>"))
+      }
+    }
+    val bindingFuture:Future[ServerBinding] = Http().bindAndHandle(route, "localhost", 8800)
+    StdIn.readLine()
+    bindingFuture.map(_.unbind()).onComplete(_ => _system.terminate())
   }
 }

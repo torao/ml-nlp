@@ -24,10 +24,10 @@ case class PerforatedSentence(id:Int, tokens:Seq[PerforatedSentence.Token]) {
     * @return 復元された文
     */
   def restore(placeholder:Map[Placeholder, Int], vocab:Vocabulary):String = {
-    val morphs = vocab.getAll(placeholder.values.toSeq ++ tokens.collect { case MorphId(morphId) => morphId })
+    val morphs = vocab.getAll(placeholder.values.toSeq ++ tokens.collect { case MorphId(morphId, _) => morphId })
     val param = placeholder.mapValues(morphId => morphs(morphId))
     tokens.map {
-      case MorphId(morphId) => morphs(morphId).surface
+      case MorphId(morphId, _) => morphs(morphId).surface
       case p:Placeholder => param(p).surface
     }.mkString
   }
@@ -41,10 +41,10 @@ case class PerforatedSentence(id:Int, tokens:Seq[PerforatedSentence.Token]) {
     * @return 復元された文
     */
   def makeString(vocab:Vocabulary, placeholder:Map[Placeholder, Int] = Map.empty):String = {
-    val morphs = vocab.getAll(placeholder.values.toSeq ++ tokens.collect { case MorphId(morphId) => morphId })
+    val morphs = vocab.getAll(placeholder.values.toSeq ++ tokens.collect { case MorphId(morphId, _) => morphId })
     val param = placeholder.mapValues(morphId => morphs(morphId))
     tokens.map {
-      case MorphId(morphId) => morphId + ":" + morphs(morphId).surface
+      case m:MorphId => m.toString
       case p@Placeholder(num, pos) => s"${pos.symbol}$num" + param.get(p).map(p => ":" + p.surface).getOrElse("")
     }.map(s => s"[$s]").mkString("(" + (if(id >= 0) s"$id:" else ""), "", ")")
   }
@@ -54,12 +54,15 @@ object PerforatedSentence {
 
   sealed trait Token
 
-  case class MorphId(id:Int) extends Token {
-    override def toString:String = id.toString
+  case class MorphId(id:Int, surface:String) extends Token {
+    override def toString:String = s"$id:$surface"
   }
 
   object MorphId {
-    def fromString(str:String):MorphId = MorphId(str.toInt)
+    def fromString(str:String):MorphId = {
+      val Array(id, surface) = str.split(":", 2)
+      MorphId(id.toInt, surface)
+    }
   }
 
   case class Placeholder(num:Int, pos:POS) extends Token {

@@ -211,7 +211,7 @@ object PerforatedSentences {
               val placeholder = Placeholder(num, pos)
               args.put(placeholder, id)
               placeholder
-            case None => MorphId(id)
+            case None => MorphId(id, m.surface)
           }
           tokens.append(token)
           prePOS = m.pos1

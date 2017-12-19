@@ -71,7 +71,7 @@ object Diagnostics {
   class Progress(prefix:String, init:Long, max:Long, interval:Long = 60 * 1000L) {
     private[this] val diag = diagnostics.get()
     private[this] val t0 = System.currentTimeMillis()
-    private[this] val _current = new AtomicLong(0L)
+    private[this] val _current = new AtomicLong(init)
     private[this] val task = new TimerTask {
       override def run():Unit = print()
     }

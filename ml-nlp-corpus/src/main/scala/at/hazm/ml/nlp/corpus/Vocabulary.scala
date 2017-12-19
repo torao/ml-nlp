@@ -114,7 +114,7 @@ class Vocabulary private[nlp](val db:Database, table:String) {
     * @param morphs ID を参照する形態素
     * @return `morphs` と同じ順序に並んだインデックス
     */
-  def indicesOf(morphs:Seq[Morph]):Seq[Int] = db.trx { con =>
+  def indicesOf(morphs:Seq[Morph]):Seq[Int] = if(morphs.isEmpty) Seq.empty else db.trx { con =>
     val existing = morphs.groupBy(_.key).values.map(_.head).grouped(20).map { ms =>
       val in1 = ms.map(_ => "?").mkString(",")
       val hashes = ms.map(m => Database.makeHash(m.key)).toSeq

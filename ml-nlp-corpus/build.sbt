@@ -20,6 +20,7 @@ libraryDependencies ++= Seq(
   "org.deeplearning4j" % "deeplearning4j-nlp" % "0.9.+",
   "org.nd4j" % "nd4j-native-platform" % "0.9.+",
   "com.typesafe.akka" %% "akka-http" % "10.+",
+  "com.typesafe.akka" %% "akka-http-spray-json" % "10.+",
   "org.slf4j" % "slf4j-log4j12" % "1.7.25",
   "org.specs2" %% "specs2-core" % "3.8.9" % "test"
 )

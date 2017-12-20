@@ -37,3 +37,6 @@ src/test/java/
 src/test/resources/
 src/test/scala-2.11/
 src/test/scala-2.12/
+
+*.cache
+

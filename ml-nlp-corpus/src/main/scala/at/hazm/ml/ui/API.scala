@@ -35,7 +35,7 @@ class API extends JsonSupport {
       complete(staticFile(uri))
     }
   } ~ post {
-    pathPrefix("api" / "1.0" / Remaining) {
+    path("api" / "1.0" / ".+".r) {
       case "predict_following_sentences" =>
         entity(as[Sentence]) { sentence =>
           complete(Sentence(sentence.text.reverse))
@@ -43,7 +43,7 @@ class API extends JsonSupport {
       case unknown =>
         logger.warn(s"unsupported API: $unknown")
         complete(StatusCodes.NotFound)
-    } ~ pathPrefix(Remaining) { path =>
+    } ~ path(".*".r) { path =>
       logger.warn(s"unsupported POST url: $path")
       complete(StatusCodes.NotFound)
     }

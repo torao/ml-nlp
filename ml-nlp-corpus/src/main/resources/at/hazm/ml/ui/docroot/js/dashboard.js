@@ -7,7 +7,8 @@
     $.ajax({
       type: "POST",
       url: "/api/1.0/predict_following_sentences",
-      data: { text: text },
+      data: JSON.stringify({ text: text }),
+      contentType: "application/json",
       dateType: "JSON",
       success: function(json){
         callback(json["text"]);

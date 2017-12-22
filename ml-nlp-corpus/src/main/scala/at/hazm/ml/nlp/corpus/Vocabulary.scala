@@ -86,7 +86,7 @@ class Vocabulary private[nlp](val db:Database, table:String) {
     * @param ids 形態素のID
     * @return ID -> 形態素 を示す Map
     */
-  def getAll(ids:Seq[Int]):Map[Int, Morph] = db.trx { con =>
+  def getAll(ids:Seq[Int]):Map[Int, Morph] = if(ids.isEmpty) Map.empty else db.trx { con =>
     val in = ids.map(_ => "?").mkString(",")
     con.query(s"SELECT * FROM $table WHERE id IN ($in)", ids:_*) { rs =>
       (rs.getInt("id"), rs2Morph(rs))
@@ -151,7 +151,7 @@ class Vocabulary private[nlp](val db:Database, table:String) {
     * @param surfaces 形態素を参照する表現
     * @return 表現に一致する形態素とそのID
     */
-  def instanceOf(surfaces:Seq[String]):Seq[(Int, Morph)] = db.trx { con =>
+  def instanceOf(surfaces:Seq[String]):Seq[(Int, Morph)] = if(surfaces.isEmpty) Seq.empty else db.trx { con =>
     val in = surfaces.map(_ => "?").mkString(",")
     con.query(s"SELECT * FROM $table WHERE surface IN ($in)", surfaces) { rs =>
       (rs.getInt("id"), rs2Morph(rs))

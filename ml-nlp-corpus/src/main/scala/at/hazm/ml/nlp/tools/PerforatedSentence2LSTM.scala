@@ -36,6 +36,10 @@ object PerforatedSentence2LSTM {
   val DefaultSentenceSize:Int = 10000
   val DefaultMaxSentencesPerDoc:Int = 1000
 
+  private[this] def modelFile(baseName:String, id:String):File = new File(baseName + "_" + id + "-lstm-sentence.zip")
+
+  def load(file:File):MultiLayerNetwork = ModelSerializer.restoreMultiLayerNetwork(file)
+
   def predict(corpus:Corpus, doc:PerforatedDocument, model:MultiLayerNetwork, predictCount:Int, maxSentencesPerDoc:Int = DefaultMaxSentencesPerDoc):Seq[Int] = {
 
     // 文 ID の 1-hot vector を時系列に並べる
@@ -91,8 +95,8 @@ object PerforatedSentence2LSTM {
     val learningRate = 0.1
 
     // 保存先のファイル名を決定
-    val id = s"sen${sentenceSize}mspd$maxSentencesPerDoc-l${lstmLayerSize}i${iterations}lr${(learningRate * 100).toInt}"
-    val modelFile:File = new File(baseName + "_" + id + "-lstm-sentence.zip")
+    val id = s"sen${sentenceSize}m$maxSentencesPerDoc-l${lstmLayerSize}i${iterations}lr${(learningRate * 100).toInt}"
+    val modelFile:File = this.modelFile(baseName, id)
 
     if(!modelFile.exists()) {
 

@@ -5,23 +5,49 @@
  */
 package at.hazm.ml.ui
 
-import java.io.FileNotFoundException
+import java.io.{File, FileNotFoundException}
+import java.lang.management.ManagementFactory
 import java.net.URI
+import java.util.concurrent.{Executors, TimeUnit}
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.server.Directives.{pathPrefix, _}
+import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
+import at.hazm.core.db.Database
 import at.hazm.core.io.{readAllBytes, using}
+import at.hazm.ml.nlp.Corpus
+import at.hazm.ml.nlp.tools.{Paragraph2PerforatedSentence, PerforatedSentence2LSTM, Wikipedia2Corpus}
 import at.hazm.ml.ui.API.JsonSupport
+import com.typesafe.config.Config
 import org.slf4j.LoggerFactory
 import spray.json._
 
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 
-class API extends JsonSupport {
+
+class API(conf:Config) extends JsonSupport with AutoCloseable {
 
   import API._
+
+  private[this] val executor = Executors.newFixedThreadPool(AvailableCPUs)
+
+  private[this] implicit val _context:ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
+
+  private[this] val db = new Database(conf.getString("corpus.db.url"),
+    conf.getString("corpus.db.username"), conf.getString("corpus.db.password"), conf.getString("corpus.db.driver"))
+
+  private[this] lazy val corpus = new Corpus(db, conf.getString("corpus.namespace"))
+
+  private[this] lazy val lstm = PerforatedSentence2LSTM.load(new File(conf.getString("corpus.lstm")))
+
+
+  def close():Unit = {
+    db.close()
+    executor.shutdown()
+    executor.awaitTermination(10, TimeUnit.SECONDS)
+  }
 
   /** サーバのルーティング定義 */
   val route:Route = get {
@@ -38,7 +64,7 @@ class API extends JsonSupport {
     path("api" / "1.0" / ".+".r) {
       case "predict_following_sentences" =>
         entity(as[Sentence]) { sentence =>
-          complete(Sentence(sentence.text.reverse))
+          complete(predictFollowingSentence(sentence))
         }
       case unknown =>
         logger.warn(s"unsupported API: $unknown")
@@ -49,7 +75,29 @@ class API extends JsonSupport {
     }
   }
 
-  private[this] def predictFollowingSentence(sentence:Sentence):Sentence = ???
+  /**
+    * 続きの文章を推定します。
+    *
+    * @param sentence 判定する文章
+    * @return 続きの文章
+    */
+  private[this] def predictFollowingSentence(sentence:Sentence):Sentence = {
+    val doc = Paragraph2PerforatedSentence.transform(corpus, Wikipedia2Corpus.transform(corpus, -1, sentence.text))
+    val text = if(doc.sentences.nonEmpty) {
+      doc.sentences.flatten.map { sentenceId =>
+        corpus.perforatedSentences(sentenceId)
+      }.foreach { sentence =>
+        logger.debug(s">> ${sentence.makeString(corpus.vocabulary)} (${sentence.tokens.mkString(" ")})")
+      }
+      PerforatedSentence2LSTM.predict(corpus, doc, lstm, 10).map { perforatedId =>
+        val sentence = corpus.perforatedSentences.apply(perforatedId)
+        val sentenceText = sentence.makeString(corpus.vocabulary)
+        logger.debug(s"<< $sentenceText")
+        sentenceText
+      }.mkString("\n")
+    } else ""
+    Sentence(text)
+  }
 
   /**
     * 指定された URI から静的ファイルを参照します。これは通常のファイルに対するリクエストと同等です。
@@ -86,6 +134,8 @@ class API extends JsonSupport {
 
 object API {
   private[API] val logger = LoggerFactory.getLogger(classOf[API])
+
+  private[API] val AvailableCPUs = ManagementFactory.getOperatingSystemMXBean.getAvailableProcessors
 
   case class Sentence(text:String)
 

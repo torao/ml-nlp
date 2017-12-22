@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets
 import at.hazm.core.db._
 import at.hazm.core.io.{readAllChars, using}
 import at.hazm.ml.nlp.Corpus._RelativeDocumentType
-import at.hazm.ml.nlp.corpus.{PerforatedSentences, Vocabulary}
+import at.hazm.ml.nlp.corpus.{PerforatedSentences, Relations, Vocabulary}
 import at.hazm.ml.nlp.model.{Morph, RelativeDocument}
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
 import play.api.libs.json.Json
@@ -60,6 +60,8 @@ class Corpus(val db:Database, val namespace:String) {
   def newDocumentStore[T](name:String)(implicit _vt:_ValueType[T]):Database#KVS[Int, T] = {
     new db.KVS[Int, T](tableName(s"doc_$name"))(_IntKeyType, _vt)
   }
+
+  def newRelationStore(name:String) = new Relations(db, tableName(s"rel_$name"))
 
 }
 

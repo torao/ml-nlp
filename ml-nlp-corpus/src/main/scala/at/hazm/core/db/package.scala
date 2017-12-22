@@ -122,6 +122,13 @@ package object db {
 
     def createSequence(sql:String):Boolean = exec(s"CREATE SEQUENCE IF NOT EXISTS $sql") > 0
 
+    /**
+      * インデックスを生成します。`sql` には CREATE INDEX ～ ON より後を記述します。インデックス名は内部で生成されます。
+      *
+      * @param sql    インデックスを生成するテーブルとそのカラム
+      * @param unique 一意制約を付ける場合 true
+      * @return 新規にインデックスが作成された場合 true
+      */
     def createIndex(sql:String, unique:Boolean = false):Boolean = {
       def _norm(name:String) = {
         val Max = 63 - 4

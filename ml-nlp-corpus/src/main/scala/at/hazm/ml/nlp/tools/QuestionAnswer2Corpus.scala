@@ -18,6 +18,9 @@ import play.api.libs.json.{JsArray, JsString}
 
 import scala.collection.mutable
 
+/**
+  * 質問/回答のような文書セットを形態素解析してコーパスに保存する。
+  */
 object QuestionAnswer2Corpus {
   private[QuestionAnswer2Corpus] val logger = LoggerFactory.getLogger(getClass.getName.dropRight(1))
 
@@ -33,20 +36,54 @@ object QuestionAnswer2Corpus {
     *
     * @param namespace 作成するコーパスの名前空間
     * @param q         質問ファイル (GZ または BZIP2 可)
-    * @param a         解凍ファイル (GZ または BZIP2 可)
+    * @param a         回答ファイル (GZ または BZIP2 可)
     */
   def makeCorpus(db:Database, namespace:String, q:File, a:File):Unit = {
     logger.info(s"making Q&A corpus: $namespace")
     val corpus = new Corpus(db, namespace)
 
     // 質問と回答を形態素解析して保存
-    tokenize("question", q, corpus){ row => (row.head.toInt, row(4)) }
-    tokenize("answer", a, corpus){ row => (row.head.toInt, row(3)) }
+    tokenize("question", q, corpus) { row => (row.head.toInt, row(4)) }
+    tokenize("answer", a, corpus) { row => (row.head.toInt, row(3)) }
+
+    // 質問と回答の関連付け
+    makeRelation(corpus, a)
   }
 
-  private[this] def tokenize(label:String, file:File, corpus:Corpus)(f:Seq[String]=>(Int,String)):Unit = {
+  private[this] def makeRelation(corpus:Corpus, a:File):Unit = {
+    val store = corpus.newRelationStore("question_to_answer")
+    val maxQuestionId = store.maxParentId
+
+    // 質問と回答の関係を読み込み
+    new Progress("relation (loading)", 0, a.length()).apply { prog =>
+      val q2a = mutable.HashMap[Int, mutable.Buffer[Int]]()
+
+      // 質問と回答の関係を保存
+      def _flush():Unit = {
+        store.register(q2a.toSeq)
+        q2a.clear()
+      }
+
+      readBinary(a, callback = { (pos:Long, _:Long) => prog.report(pos) }) { is =>
+        new CSVIterator(new InputStreamReader(is), '\t').drop(1).foreach { row =>
+          val qid = row(2).toInt
+          // 保存中に中断されたものがあるかもしれないので途中から再開するための実装
+          if(qid >= maxQuestionId) {
+            q2a.getOrElseUpdate(qid, mutable.Buffer[Int]()).append(row.head.toInt)
+            if(q2a.size > 10000) {
+              _flush()
+            }
+          }
+        }
+      }
+      _flush()
+    }
+  }
+
+  private[this] def tokenize(label:String, file:File, corpus:Corpus)(f:Seq[String] => (Int, String)):Unit = {
     val ids = mutable.HashSet[Int]()
-    def checkId(id:Int):Unit = if(ids.contains(id)){
+
+    def checkId(id:Int):Unit = if(ids.contains(id)) {
       logger.warn(s"duplicate id detected: $id")
       ids += id
     }
@@ -61,7 +98,7 @@ object QuestionAnswer2Corpus {
     if(existing < total) readText(file, bufferSize = 1 * 1024 * 1024) { in =>
       logger.info(f"skipping pre-parsed $existing%,d articles")
       val it = new CSVIterator(in, '\t').drop(1)
-      if(existing > 0){
+      if(existing > 0) {
         new Progress(s"${label}s (skipping)", 0, existing) {
           prog =>
           it.take(existing).foreach { x => prog.report(x.last) }
@@ -70,14 +107,14 @@ object QuestionAnswer2Corpus {
       new Progress(s"${label}s", existing, total) {
         prog =>
         it.foreach { row =>
-          val (questionId, question) = f(row)
+          val (cid, question) = f(row)
           val tokens = Kuromoji.tokenize(Text.normalize(question))
           val morphs = tokens.map(_._1)
           val ids = corpus.vocabulary.registerAll(morphs)
           val json = JsArray(tokens.zip(ids).map { case ((_, instance), id) =>
             JsString(s"$id:${instance.surface}")
           })
-          store.set(questionId.toInt, json)
+          store.set(cid.toInt, json)
           prog.report(row.last)
         }
       }
@@ -92,7 +129,9 @@ object QuestionAnswer2Corpus {
     * @param file レコード数をカウントするファイル
     * @return レコード数
     */
-  private[this] def countArticles(file:File):Int = {
+  private[this] def countArticles(file:File):Int
+
+  = {
     logger.info(s"${file.getName}: counting tsv records")
     val step = 50
     val len = file.length()

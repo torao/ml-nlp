@@ -64,7 +64,7 @@ object QuestionAnswer2Corpus {
         q2a.clear()
       }
 
-      readBinary(a, callback = { (pos:Long, _:Long) => prog.report(pos) }) { is =>
+      readBinary(a, callback = { (pos:Long) => prog.report(pos) }) { is =>
         new CSVIterator(new InputStreamReader(is), '\t').drop(1).foreach { row =>
           val qid = row(2).toInt
           // 保存中に中断されたものがあるかもしれないので途中から再開するための実装
@@ -137,7 +137,7 @@ object QuestionAnswer2Corpus {
     val len = file.length()
     var cur = -1
 
-    def callback(bytes:Long, lines:Long):Unit = {
+    def callback(bytes:Long):Unit = {
       val value = (bytes * step / len).toInt
       if(cur != value) {
         logger.info(file.getName + ": " + "O" * value + "." * (step - value) + f": ${bytes / 1024 / 1024}%,dMB / ${file.length() / 1024 / 1024}%,dMB")

@@ -40,6 +40,15 @@ class Vocabulary private[nlp](val db:Database, table:String) {
     }
   }
 
+  /** 文書の開始と終了を示す形態素インスタンス */
+  val Seq(startTextMarker, endTextMarker) = locally {
+    val morphs = Seq("$STX", "$ETX").map { surface => Morph(surface, "制御コード", "*", "*", "*") }
+    val ids = registerAll(morphs)
+    ids.zip(morphs).map { case (id, morph) =>
+      Morph.Instance(id, morph.surface, "*", "*", "*", "*", Map.empty)
+    }
+  }
+
   /** すべての品詞に対するデフォルトの形態素インスタンス。 */
   lazy val defaultInstances:Map[POS, Morph.Instance] = {
     // すべての品詞のデフォルト値を登録

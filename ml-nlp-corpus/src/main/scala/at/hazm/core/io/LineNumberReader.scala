@@ -44,7 +44,7 @@ class LineNumberReader(r:Reader, pushBackSize:Int) extends PushbackReader(r, pus
   }
 
   private[this] def _read(ch:Int):Int = {
-    if(ch == '\n'){
+    if(ch == '\n') {
       _line += 1
       _prevColumnSize = _column
       _column = 0

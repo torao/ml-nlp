@@ -2,17 +2,17 @@ package at.hazm.core.io
 
 import java.io._
 
-class ProgressReader(_in:Reader, callback:(Long,Long)=>Unit) extends FilterReader(_in) {
+class ProgressReader(_in:Reader, callback:(Long, Long) => Unit) extends FilterReader(_in) {
   private[this] var position = 0L
   private[this] var line = 1L
 
-  def this(file:File, callback:(Long,Long)=>Unit) = this(new FileReader(file), callback)
+  def this(file:File, callback:(Long, Long) => Unit) = this(new FileReader(file), callback)
 
   override def read():Int = {
     val ch = super.read()
-    if(ch >= 0){
+    if(ch >= 0) {
       position += 1
-      if(ch == '\n'){
+      if(ch == '\n') {
         line += 1
       }
       callback(position, line)
@@ -22,9 +22,9 @@ class ProgressReader(_in:Reader, callback:(Long,Long)=>Unit) extends FilterReade
 
   override def read(cbuf:Array[Char], off:Int, len:Int):Int = {
     val l = super.read(cbuf, off, len)
-    if(l >= 0){
+    if(l >= 0) {
       position += l
-      for(i <- off until (off + l)){
+      for(i <- off until (off + l)) {
         if(cbuf(i) == '\n') line += 1
       }
       callback(position, line)

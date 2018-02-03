@@ -68,7 +68,8 @@ package object tools {
       System.err.print(s"行数をカウントしています [${file.getName}] ")
       System.err.flush()
       var period = 0
-      val count = readBinary(file, 512 * 1024, { (cur, max) =>
+      val max = file.length()
+      val count = readBinary(file, 512 * 1024, { (cur) =>
         if(period < (cur * 10) / max) {
           System.err.print(period)
           System.err.flush()

@@ -66,12 +66,11 @@ package object io {
     *
     * @param file       ファイル
     * @param bufferSize バッファサイズ (バイト数)
-    * @param callback   読み出し済みの (バイト数, 行数) コールバック
+    * @param callback   (読み出し済みバイト数) コールバック
     * @return 入力ストリーム
     */
-  def openBinaryInput(file:File, bufferSize:Int = DefaultIOBufferSize, callback:(Long, Long) => Unit = null):InputStream = {
-    val len = file.length()
-    val fs = if(callback == null) new FileInputStream(file) else new ProgressInputStream(file, { pos:Long => callback(pos, len) })
+  def openBinaryInput(file:File, bufferSize:Int = DefaultIOBufferSize, callback:(Long) => Unit = null):InputStream = {
+    val fs = if(callback == null) new FileInputStream(file) else new ProgressInputStream(file, callback)
     val is = if(file.getName.endsWith(".gz")) {
       new GZIPInputStream(fs)
     } else if(file.getName.endsWith(".bz2")) {
@@ -87,13 +86,13 @@ package object io {
     * @param file       ファイル
     * @param charset    文字セット
     * @param bufferSize バッファサイズ (バイト数)
-    * @param callback   読み出し済みの (文字数, 行数) コールバック
+    * @param callback   (読み出し済み文字数, 読み込み済み行数) コールバック
     * @return 入力ストリーム
     */
   def openTextInput(file:File, charset:Charset = StandardCharsets.UTF_8, bufferSize:Int = DefaultIOBufferSize, callback:(Long, Long) => Unit = null):BufferedReader = {
     val is = openBinaryInput(file, bufferSize)
     val r = new InputStreamReader(is, charset)
-    val in = if(callback == null) r else new ProgressReader(r, { (pos:Long, line:Long) => callback(pos, line) })
+    val in = if(callback == null) r else new ProgressReader(r, callback)
     new BufferedReader(in)
   }
 
@@ -128,7 +127,7 @@ package object io {
     new PrintWriter(out)
   }
 
-  def readBinary[T](file:File, bufferSize:Int = 0, callback:(Long, Long) => Unit = null)(f:(InputStream) => T):T = {
+  def readBinary[T](file:File, bufferSize:Int = 0, callback:(Long) => Unit = null)(f:(InputStream) => T):T = {
     using(openBinaryInput(file, bufferSize, callback))(f)
   }
 

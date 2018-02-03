@@ -7,6 +7,7 @@ import java.util.{Timer, TimerTask}
 import javax.management.ObjectName
 
 import at.hazm.core.util.Diagnostics.Performance
+import at.hazm.core.util.diag.ProgressMXBean
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable

@@ -5,7 +5,7 @@
  */
 package at.hazm.core.io
 
-import java.io.{PushbackReader, Reader}
+import java.io.{IOException, PushbackReader, Reader}
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -83,6 +83,9 @@ class CSVIterator(in:Reader, separator:Char = ',') extends Iterator[Seq[String]]
             }
             _prefetch(field, fields, quoted = false)
         }
+      } else if(ch < 0){
+        val fragment = (fields.mkString(",").takeRight(15) + ",>\"<" + field.take(30) + "...").replaceAll("\\s", " ")
+        throw new IOException(s"quoted field is not end: $fragment...")
       } else {
         field.append(ch.toChar)
         _prefetch(field, fields, quoted = true)

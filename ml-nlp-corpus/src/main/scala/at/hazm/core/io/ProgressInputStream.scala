@@ -15,15 +15,20 @@ class ProgressInputStream(_in:InputStream, callback:(Long) => Unit) extends Filt
   def this(file:File, callback:(Long) => Unit) = this(new FileInputStream(file), callback)
 
   override def read():Int = {
-    position += 1
-    callback(position)
-    super.read()
+    val ch = super.read()
+    if(ch >= 0){
+      position += 1
+      callback(position)
+    }
+    ch
   }
 
   override def read(b:Array[Byte], off:Int, len:Int):Int = {
     val l = super.read(b, off, len)
-    position += l
-    callback(position)
+    if(l > 0){
+      position += l
+      callback(position)
+    }
     l
   }
 
